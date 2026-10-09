@@ -69,10 +69,10 @@ Procura 20 s depois de abrir e a cada 3 h; também dá para clicar na versão (c
 baixa o instalador em segundo plano (conferindo o sha256) e aparece **Atualizar para X**. O
 clique fecha o app, instala sem telas e abre de novo (uns 20 s). Logins e configurações ficam.
 
-**Publicar uma versão:** suba `version` no `package.json`, faça commit e push, e rode
-`sh tools/publicar.sh "o que mudou"` (ou crie a tag `vX.Y.Z` no GitHub). O GitHub Actions
-(`.github/workflows/release.yml`) gera o instalador e cria a Release com o .exe em ~3 min.
-A tag tem que ser maior que a versão instalada.
+**Publicar uma versão:** escreva o que mudou em `NOVIDADES.md`, suba `version` no
+`package.json` (ex.: 0.6.0 → 0.6.1) e dê push no `main`. O GitHub Actions
+(`.github/workflows/release.yml`) gera o instalador e cria a Release `v0.6.1` com o .exe em
+~3 min (acompanhe na aba Actions). A versão nova tem que ser maior que a instalada.
 
 ## Twitch (bônus de XP)
 

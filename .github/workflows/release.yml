@@ -1,10 +1,13 @@
-# Publica o instalador do PokeIdle Multi quando uma tag vX.Y.Z é enviada.
-# A tag tem que bater com "version" do app-multiconta/app/package.json.
-# Os apps instalados acham a versão nova nas Releases e se atualizam.
+# Publica o instalador do PokeIdle Multi quando a "version" de app-multiconta/app/package.json
+# muda no main (ou na mão, em Actions → Publicar instalador → Run workflow).
+# Se a Release daquela versão já existe, não faz nada. Os apps instalados acham a versão nova
+# nas Releases e se atualizam. As novidades vêm do arquivo app-multiconta/app/NOVIDADES.md.
 name: Publicar instalador
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['app-multiconta/app/package.json', '.github/workflows/release.yml']
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -18,19 +21,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: NSIS
-        run: sudo apt-get update && sudo apt-get install -y nsis
-      - name: Confere versão
-        run: |
-          V=$(node -p "require('./package.json').version")
-          [ "v$V" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME diferente da versão $V do package.json"; exit 1; }
-          echo "VERSAO=$V" >> "$GITHUB_ENV"
-      - name: Gera o instalador
-        run: sh tools/build-win.sh
-      - name: Publica a Release
+      - name: Versão nova?
+        id: v
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTAS=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
-          gh release create "$GITHUB_REF_NAME" "dist/PokeIdle-Multi-Instalador-$VERSAO.exe" \
-            --title "PokeIdle Multi $VERSAO" --notes "${NOTAS:-Versão $VERSAO}"
+          V=$(node -p "require('./package.json').version")
+          echo "VERSAO=$V" >> "$GITHUB_ENV"
+          if gh release view "v$V" >/dev/null 2>&1; then echo "v$V já publicada"; echo "nova=nao" >> "$GITHUB_OUTPUT"; else echo "nova=sim" >> "$GITHUB_OUTPUT"; fi
+      - name: NSIS
+        if: steps.v.outputs.nova == 'sim'
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      - name: Gera o instalador
+        if: steps.v.outputs.nova == 'sim'
+        run: sh tools/build-win.sh
+      - name: Publica a Release
+        if: steps.v.outputs.nova == 'sim'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f NOVIDADES.md ] && NOTAS=$(cat NOVIDADES.md) || NOTAS="Versão $VERSAO"
+          gh release create "v$VERSAO" "dist/PokeIdle-Multi-Instalador-$VERSAO.exe" \
+            --target "$GITHUB_SHA" --title "PokeIdle Multi $VERSAO" --notes "$NOTAS"
