@@ -26,8 +26,8 @@ O login fica guardado por quadrado.
   Arraste a divisória entre os quadrados para mudar o tamanho (duplo clique nela volta ao padrão).
   Arraste o cabeçalho de uma conta e solte no de outra para trocar as duas de lugar; a 1ª fica
   com o espaço maior nos layouts de destaque.
-- **Barra de cima:** aviso vermelho quando alguma conta tem hunt melhor (clique para ver), RAM
-  do app, **Ligar tudo** e **Desligar tudo** (a chave "Automação" de todas as contas).
+- **Barra de cima:** aviso vermelho quando alguma conta tem hunt melhor (clique para ver), modos de
+  economia, RAM do app e a versão (amarelo quando tem atualização).
 - **Cabeçalho do quadrado:** conta, nível, hunt atual e XP/h. Botão **power**: desliga a conta
   (2 cliques; fecha o jogo dela, libera a RAM e sai do chat da Twitch). Fica lembrado ao reabrir. Contas desligadas saem da grade (as
   outras ganham o espaço) e ficam na barra "Desligadas" embaixo, com o botão Ligar. Ícone da Twitch (passe o mouse:
@@ -54,7 +54,7 @@ app usam.
   desenhar o mapa e os pokémon andando e o servidor para de mandar o campo. A caça, as compras e a
   troca de mapa continuam iguais.
 - **Ultra eco:** Eco + o app para de desenhar os jogos. Fica uma tela preta com o resumo de cada
-  conta (hunt, XP/h, automação). É o mais leve: quase nada de placa de vídeo. Tudo continua
+  conta ligada (pokémon farmando, lugar, XP/h, automação). É o mais leve: quase nada de placa de vídeo. Tudo continua
   rodando por trás; "Ver os jogos (Eco)" volta.
 
 O modo fica salvo e é reaplicado quando uma conta abre ou recarrega. Enquanto você não escolher

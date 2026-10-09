@@ -52,8 +52,16 @@ const visU = await viewsVis();
 check('Ultra eco: jogos não são desenhados (views escondidas)', visU.length === 4 && visU.every((v) => v === false), JSON.stringify(visU));
 const ecoU = await jogosJs("document.documentElement.classList.contains('modo-economia')");
 check('Ultra eco mantém o Modo Economia', ecoU.every(Boolean));
-const linhasU = await ui.$$eval('#ultra .u-l', (e) => e.map((x) => x.textContent));
-check('tela preta lista as contas', linhasU.length === 4 && linhasU.some((t) => /murilo/.test(t)), linhasU.join(' | '));
+const linhasU = await ui.$$eval('#ultra .u-l:not(.u-cab)', (e) => e.map((x) => x.textContent));
+check('tela preta: conta, pokémon e lugar', linhasU.length === 4 && linhasU.some((t) => /murilo/.test(t) && /Yanma/.test(t) && /Kadabra/.test(t) && /Kanto/.test(t)), linhasU.join(' | '));
+check('sem Ligar tudo / Desligar tudo', !(await ui.$('#ligaTudo')) && !(await ui.$('#desligaTudo')));
+// conta desligada some da tela preta
+const desligar = (on) => ui.evaluate(async (on) => { const l = await app.power(3, on); S[3].desligada = !l; renderTudo(); }, on);
+await desligar(false); await sleep(800);
+const linhasOff = await ui.$$eval('#ultra .u-l:not(.u-cab)', (e) => e.length);
+await ui.screenshot({ path: path.join(OUT, 'ultra2.png') });
+check('conta desligada não aparece no Ultra eco', linhasOff === 3, String(linhasOff));
+await desligar(true); await sleep(2500);
 const timerVivo = await jogosJs('new Promise((r) => { let n = 0; const t = setInterval(() => { if (++n === 5) { clearInterval(t); r(n); } }, 100); })');
 check('Ultra eco: timers do jogo continuam rodando escondidos', timerVivo.every((n) => n === 5));
 await ui.screenshot({ path: path.join(OUT, 'ultra.png') });

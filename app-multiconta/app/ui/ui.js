@@ -577,33 +577,40 @@ function renderUltra() {
   const on = MODO === 'ultra';
   document.body.classList.toggle('modo-ultra', on);
   if (!on) { if (el.innerHTML) { el.innerHTML = ''; el.dataset.h = ''; } return; }
+  const cap = (t) => String(t || '').replace(/^./, (c) => c.toUpperCase());
+  // só as contas ligadas: nome · pokémon farmando · lugar · XP/h · automação
   const linhas = S.map((s, i) => {
-    if (s.desligada) return `<div class="u-l off"><span class="dot"></span><b>${nomeConta(i)}</b><span class="u-h">desligada</span></div>`;
-    const xp = xphAgora(i), auto = !!cfgDe(i).enabled;
-    const onde = s.snap?.noCentro ? 'Centro Pokémon' : nomeHunt(i, s.snap?.huntSlug);
-    return `<div class="u-l"><span class="dot ${estadoPonto(i)}"></span><b>${nomeConta(i)}</b>`
-      + `<span class="u-h">${esc(onde) || '—'}</span>`
+    if (s.desligada) return '';
+    const xp = xphAgora(i), auto = !!cfgDe(i).enabled, pk = s.pk;
+    const snap = s.snap;
+    const lugar = !snap?.ready ? 'carregando…' : snap.noCentro ? 'Centro Pokémon' : snap.huntSlug ? nomeHunt(i, snap.huntSlug) : 'fora de hunt';
+    const area = snap?.huntSlug && !snap.noCentro ? cap(s.rAtual?.hunt?.area) : '';
+    return `<div class="u-l"><span class="dot ${estadoPonto(i)}"></span>`
+      + `<b class="u-n">${nomeConta(i)}</b>`
+      + `<span class="u-pk">${pk ? `${pk.shiny ? '✨ ' : ''}${esc(pk.nome)} <small>Nv ${num(pk.level)}</small>` : '—'}</span>`
+      + `<span class="u-h">${esc(lugar)}${area ? ` <small>${esc(area)}</small>` : ''}</span>`
       + `<span class="u-x">${xp != null ? curto(xp) + ' XP/h' : ''}</span>`
       + `<span class="u-a ${auto ? 'on' : ''}">${auto ? 'automação ligada' : 'automação desligada'}</span></div>`;
   }).join('');
   const html = `<div class="u-box"><div class="u-t">Ultra eco</div>`
     + `<p>Os jogos continuam rodando (caça, compras e troca de mapa), só não são desenhados. Menos processador e placa de vídeo.</p>`
-    + `<div class="u-lista">${linhas}</div>`
+    + (linhas ? `<div class="u-lista"><div class="u-l u-cab"><span></span><span>Conta</span><span>Pokémon</span><span>Lugar</span><span>XP/h</span><span></span></div>${linhas}</div>` : '<div class="u-lista"><div class="u-l off">Todas as contas estão desligadas.</div></div>')
     + `<div class="u-b"><button data-modo="eco">Ver os jogos (Eco)</button><button data-modo="normal" class="ghost">Normal</button></div></div>`;
   if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
 }
+// Botão da versão: só diz se tem atualização ou não (sem "procurando").
 function renderAtt() {
   const b = $('#att');
   if (!b || !ATT) return;
   const v = 'v' + ATT.atual;
   let txt = v, cls = '', tit = 'Clique para procurar atualização';
+  if (ATT.fase === 'verificando') return;   // fica como estava
   if (ATT.fase === 'pronto') { txt = `Atualizar para ${ATT.nova}`; cls = 'novo'; tit = 'Fecha o app, instala e abre de novo (uns 20 s). Logins e configurações continuam.' + (ATT.notas ? '\n\nNovidades:\n' + ATT.notas : ''); }
-  else if (ATT.fase === 'baixando') { txt = `Baixando ${ATT.nova}… ${Math.round((ATT.progresso || 0) * 100)}%`; cls = 'baixa'; tit = 'Baixando a versão nova em segundo plano'; }
-  else if (ATT.fase === 'verificando') txt = v + ' · procurando…';
+  else if (ATT.fase === 'baixando') { txt = `Nova versão ${ATT.nova} · ${Math.round((ATT.progresso || 0) * 100)}%`; cls = 'baixa'; tit = 'Baixando a versão nova em segundo plano'; }
   else if (ATT.fase === 'instalando') { txt = 'Instalando…'; cls = 'baixa'; }
-  else if (ATT.fase === 'erro') { cls = 'erro'; tit = 'Não deu para procurar atualização: ' + ATT.erro + '\nClique para tentar de novo'; }
-  else if (ATT.fase === 'sem-repo') tit = 'Atualização automática ainda não configurada (falta o repositório no package.json)';
-  else if (ATT.fase === 'em-dia') tit = 'Você está na versão mais nova. Clique para procurar de novo.';
+  else if (ATT.fase === 'em-dia') { txt = v + ' · atualizado'; tit = 'Você está na versão mais nova. Clique para procurar de novo.'; }
+  else if (ATT.fase === 'erro') tit = 'Não deu para procurar atualização: ' + ATT.erro + '\nClique para tentar de novo';
+  else if (ATT.fase === 'sem-repo') tit = 'Atualização automática não configurada';
   b.textContent = txt;
   b.className = 'att ' + cls;
   b.title = tit;
@@ -648,7 +655,7 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#ligaTudo,#desligaTudo,#alertaG,[data-modo],#att';
+const ALVOS = '[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) { if (menu != null || painel) abrir({ menu: null, painel: null }); return; }
@@ -663,16 +670,11 @@ async function acaoClick(d, id, campos) {
   } else if (id === 'att') {
     if (ATT?.fase === 'pronto') { toast('Instalando a versão nova… o app abre sozinho em seguida'); app.att.instalar(); return; }
     if (ATT && ['baixando', 'verificando', 'instalando'].includes(ATT.fase)) return;
-    toast('Procurando atualização…');
     ATT = await app.att.verificar(); renderAtt();
     if (ATT.fase === 'em-dia') toast('Você já está na versão mais nova');
     else if (ATT.fase === 'pronto') toast(`Versão ${ATT.nova} baixada: clique em "Atualizar para ${ATT.nova}"`);
     else if (ATT.fase === 'erro') toast('Não deu para procurar: ' + ATT.erro);
     else if (ATT.fase === 'sem-repo') toast('Atualização automática ainda não configurada');
-  } else if (id === 'ligaTudo' || id === 'desligaTudo') {
-    const on = id === 'ligaTudo';
-    for (let i = 0; i < N; i++) { const c = cfgDe(i); c.enabled = on; salvarCfg(i, c); }
-    toast(on ? 'Automação ligada nas contas' : 'Automação desligada em todas as contas');
   } else if (id === 'alertaG') {
     if (d.i !== '') { foco = +d.i; painel = { i: +d.i, k: 'mapa' }; renderTudo(); abrir({}); }
   } else if (d.kkver) {

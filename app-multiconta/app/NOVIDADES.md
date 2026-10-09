@@ -1,3 +1,3 @@
-- Modos Normal / Eco / Ultra eco na barra de cima (valem para todas as contas)
-- Atualização automática: o app procura versão nova aqui e mostra "Atualizar para X"
-- Logins e configurações continuam ao atualizar
+- Ultra eco mostra só as contas ligadas, com o pokémon farmando e o lugar
+- Versão no canto de cima só diz se tem atualização ou não
+- Saíram os botões Ligar tudo / Desligar tudo
