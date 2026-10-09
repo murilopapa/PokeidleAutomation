@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PokeIdle Multi — protótipo</title>
+<style>
+:root{--bg:#0b1020;--card:#141c30;--card2:#1b2540;--line:#26314d;--fg:#e9eef8;--muted:#8e9bb6;--accent:#ffcb05;--blue:#3b82f6;--ok:#34d399;--mid:#c9d3e6;--warn:#fbbf24;--bad:#f87171;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+b{font-weight:650}
+button{cursor:pointer;font:inherit;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg)}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--ok);color:#062014;border-color:var(--ok);font-weight:700}
+button.ghost{background:transparent}
+input[type=number],select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
+input[type=checkbox]{accent-color:var(--accent)}
+
+/* barra global */
+.top{display:flex;align-items:center;gap:12px;padding:8px 14px;background:linear-gradient(180deg,#121a30,var(--bg));border-bottom:1px solid var(--line)}
+.logo{font-weight:800;font-size:16px}.logo b{color:var(--accent);font-weight:800}
+.sub{color:var(--muted);font-size:11.5px}
+.sp{flex:1}
+.chip{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:12px;color:var(--muted)}
+.chip b{color:var(--fg)}
+.master{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--line);border-radius:999px;cursor:pointer;font-weight:600;background:var(--card)}
+.master.on{border-color:var(--ok);color:var(--ok)}
+.alerta-g{display:none;align-items:center;gap:6px;padding:4px 10px;border:1.5px solid var(--bad);border-radius:999px;background:#2a1218;color:var(--bad);font-weight:600;font-size:12px}
+.alerta-g.on{display:flex}
+
+/* grade */
+.stage{flex:1;min-height:0;position:relative;padding:10px}
+.grid{height:100%;display:grid;gap:10px;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.slot{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;transition:border-color .15s}
+.slot.alert{border-color:var(--bad)}
+.grid.focus .slot{display:none}
+.grid.focus{grid-template-columns:1fr;grid-template-rows:1fr}
+.grid.focus .slot.big{display:flex}
+
+.head{display:flex;align-items:center;gap:8px;height:34px;padding:0 8px 0 10px;background:var(--card2);border-bottom:1px solid var(--line);flex:none;cursor:default;user-select:none}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.dot.hunt{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.dot.fight{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.dot.bad{background:var(--bad);box-shadow:0 0 6px var(--bad)}
+.nome{font-weight:700;white-space:nowrap}
+.nome small{color:var(--muted);font-weight:500;margin-left:4px}
+.hunt-i{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hunt-i b{color:var(--accent)}
+.ib{all:unset;cursor:pointer;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;color:var(--muted);position:relative;flex:none}
+.ib:hover{background:var(--card);color:var(--fg)}
+.ib svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tw{color:#a78bfa}.tw.off{color:var(--muted)}
+.tw .n{position:absolute;top:1px;right:0;font-size:9.5px;font-weight:800;background:var(--accent);color:#1a1400;border-radius:8px;padding:0 4px;line-height:13px}
+
+/* overlay twitch */
+.pop{display:none;position:absolute;top:36px;right:34px;width:250px;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 10px 30px #0008}
+.tw-wrap:hover .pop,.pop:hover{display:block}
+.tw-wrap{display:contents}
+.pop h4{margin:2px 4px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--accent)}
+.live{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px}
+.live:hover{background:var(--card2)}
+.live .l{width:7px;height:7px;border-radius:50%;background:var(--bad)}
+.live .nm{flex:1;font-weight:600}.live .bn{color:var(--ok);font-size:12px}
+.live .st{font-size:11px;color:var(--muted)}
+.pop .auto{display:flex;align-items:center;gap:6px;margin:6px 4px 2px;padding-top:6px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+
+/* área do jogo (placeholder) */
+.game{flex:1;min-height:0;position:relative;overflow:hidden;background:
+ linear-gradient(180deg,#1d2c52 0%,#26406b 55%,#2f5d46 55%,#2a4f3c 100%)}
+.game::before{content:'';position:absolute;inset:0;background:
+ repeating-linear-gradient(0deg,#0000 0 15px,#0000000d 15px 16px),repeating-linear-gradient(90deg,#0000 0 15px,#0000000d 15px 16px)}
+.mon{position:absolute;bottom:22%;width:44px;height:44px;border-radius:10px;image-rendering:pixelated}
+.hud{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap}
+.hud span{background:#0b1020cc;border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:11.5px;color:var(--mid)}
+.hud b{color:var(--accent)}
+.ph{position:absolute;top:8px;left:10px;font-size:10.5px;color:#cfe0ffaa;letter-spacing:.4px}
+
+/* sem sessão */
+.login{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--bg);padding:16px;text-align:center}
+.login h3{margin:0;font-size:15px}
+.login p{margin:0;color:var(--muted);font-size:12px;max-width:280px}
+.login .bt{display:flex;flex-direction:column;gap:8px;width:230px;margin-top:6px}
+.login .bt button{padding:9px 12px;font-weight:650}
+.login .tw-b{border-color:#6d4fd1;color:#c9b8ff}
+
+/* barra de automação (fora do jogo, sem sobreposição) */
+.bar{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px 0 8px;background:var(--card2);border-top:1px solid var(--line);flex:none}
+.am{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);font-size:12px;color:var(--muted);white-space:nowrap}
+.am:hover{border-color:var(--accent)}
+.am.open{border-color:var(--accent);color:var(--fg)}
+.am i{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.am.on i{background:var(--ok);box-shadow:0 0 5px var(--ok)}
+.am b{color:var(--fg)}
+.am .car{width:9px;height:9px;fill:none;stroke:currentColor;stroke-width:2.2;transition:transform .15s}
+.am.open .car{transform:rotate(180deg)}
+.bar .master-c{white-space:nowrap;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+/* painel que abre empurrando o jogo (no Electron: encolhe a view, nunca fica por cima) */
+.panel{display:none;position:absolute;left:8px;right:8px;bottom:42px;max-height:calc(100% - 90px);overflow-y:auto;z-index:12;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:0 -8px 30px #000a}
+.panel.on{display:block}
+.map2{display:grid;grid-template-columns:1fr 1.4fr;gap:12px}
+@media(max-width:700px){.map2{grid-template-columns:1fr}}
+.col h5{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px}
+.kv span{color:var(--muted)}.kv b{text-align:right}
+.mon-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.mon-h .ic{width:34px;height:34px;border-radius:9px;background:var(--card2);border:1px solid var(--line)}
+.top3{display:flex;flex-direction:column;gap:5px}
+.t3{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:var(--card)}
+.t3.first{border-color:var(--accent)}
+.t3 .n{width:18px;height:18px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none}
+.t3.first .n{background:var(--accent);color:#1a1400}
+.t3 .nm{flex:1;font-weight:650;min-width:0}
+.t3 .nm small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+.t3 .xp{color:var(--accent);font-weight:700;white-space:nowrap}
+.t3 .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--ok);color:var(--ok)}
+.t3 .tag.seg{border-color:var(--mid);color:var(--mid)}
+.t3 .atual{font-size:10.5px;color:var(--muted)}
+.panel .ph2{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.panel .ph2 span{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--accent);font-weight:700}
+.g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px}
+/* menu da engrenagem */
+.menu{display:none;position:absolute;top:36px;right:6px;width:230px;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 10px 30px #0008}
+.menu.on{display:block}
+.menu h4{margin:2px 4px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--accent)}
+.menu .st{display:flex;align-items:center;gap:6px;padding:4px;color:var(--muted);font-size:12px}
+.menu .st b{color:var(--fg)}
+.menu button{width:100%;margin-top:6px;padding:7px}
+.menu .tw-b{border-color:#6d4fd1;color:#c9b8ff}
+.menu .un{border-color:var(--bad);color:var(--bad)}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:650}
+.sw input{display:none}
+.sw .tg{width:34px;height:19px;border-radius:999px;background:var(--card2);border:1px solid var(--line);position:relative;flex:none;cursor:pointer;transition:.15s}
+.sw .tg::after{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--muted);transition:.15s}
+.sw input:checked+.tg{background:#12362b;border-color:var(--ok)}
+.sw input:checked+.tg::after{left:17px;background:var(--ok)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.field{display:flex;flex-direction:column;gap:3px;margin:8px 0 0;font-size:12px;color:var(--muted)}
+.hint{color:var(--muted);font-size:11.5px;margin:6px 0 0}
+.res{margin-top:8px;padding:6px 8px;border-radius:8px;background:var(--card2);font-size:12px;color:var(--mid)}
+.res b{color:var(--ok)}
+.off-box{opacity:.45;pointer-events:none}
+
+.foot{display:flex;gap:8px;margin-top:12px}
+.foot button{flex:1}
+
+/* tira de miniaturas no modo expandido */
+.strip{display:none;gap:8px;padding:0 10px 10px}
+.strip.on{display:flex}
+.th{flex:1;display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--card);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.th:hover{border-color:var(--accent)}.th.cur{border-color:var(--accent)}
+.th .xp{margin-left:auto;color:var(--accent);font-size:12px;font-weight:700}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line);padding:6px 14px;border-radius:999px;font-size:12px;opacity:0;transition:.2s;pointer-events:none;z-index:50}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div><div class="logo">PokeIdle <b>Multi</b></div><div class="sub">protótipo visual · dados de exemplo</div></div>
+  <span class="sp"></span>
+  <div class="alerta-g" id="alertaG">● hunt melhor na Conta 2</div>
+  <div class="chip">RAM <b id="ram">742 MB</b></div>
+  <button id="ligaTudo" class="primary">Ligar tudo</button>
+  <button id="desligaTudo">Desligar tudo</button>
+</div>
+
+<div class="stage"><div class="grid" id="grid"></div></div>
+<div class="strip" id="strip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const ICON={
+ gear:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+ max:'<svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
+ min:'<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',
+ tw:'<svg viewBox="0 0 24 24"><path d="M4 3h17v11l-4 4h-4l-3 3v-3H4z"/><path d="M15 8v4M11 8v4"/></svg>',
+ x:'<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+};
+const LIVES=[{n:'pokeidle_oficial',b:'+15%'},{n:'pokeidle_pt',b:'+2,5%'},{n:'pokeidle_en',b:'+2,5%'}];
+const contas=[
+ {id:1,pers:{pk:'Furious Scizor',nv:412,iv:'31 / 32 / 30',ref:'+3',tm:'sim',aoe:'não',pb:'Hyper / Ultra',bon:'+34%'},top:[{m:'Cinnabar Mansion',kph:'1.240',kpv:'38',xp:'18,4M/h',s:'Tranquila'},{m:'Seafoam B3F',kph:'1.105',kpv:'22',xp:'16,9M/h',s:'Tranquila'},{m:'Victory Road 2F',kph:'980',kpv:'9',xp:'15,2M/h',s:'Segura'}],nome:'Murilo Main',nv:412,estado:'hunt',hunt:'Cinnabar Mansion',xph:'18,4M',tw:true,twLogin:'murilo_main',lives:[1,1,0],auto:true,bola:{on:true,tipo:'Ultra Ball',teto:500,gat:100,lote:100},poc:{on:true,tipo:'Hyper Potion',teto:300,gat:100,lote:100},mapa:{on:true,risco:'baixo'},cor:'#3b82f6',mons:['#f87171','#fbbf24']},
+ {id:2,pers:{pk:'Kadabra',nv:287,iv:'28 / 30 / 31',ref:'+1',tm:'não',aoe:'não',pb:'Super / Great',bon:'+15%'},top:[{m:'Cerulean Cave',kph:'900',kpv:'14',xp:'11,3M/h',s:'Segura'},{m:'Seafoam B3F',kph:'820',kpv:'25',xp:'9,1M/h',s:'Tranquila'},{m:'Rock Tunnel',kph:'700',kpv:'30',xp:'7,8M/h',s:'Tranquila'}],nome:'Conta 2',nv:287,estado:'fight',hunt:'Seafoam B3F',xph:'9,1M',tw:true,twLogin:'conta2_tv',lives:[1,0,0],auto:false,bola:{on:true,tipo:'Great Ball',teto:400,gat:100,lote:100},poc:{on:false,tipo:'Super Potion',teto:200,gat:100,lote:100},mapa:{on:false,risco:'alto'},cor:'#34d399',mons:['#a78bfa'],alerta:true},
+ {id:3,pers:{pk:'Haunter',nv:156,iv:'25 / 27 / 29',ref:'0',tm:'não',aoe:'não',pb:'Potion / Poke',bon:'0%'},top:[{m:'Victory Road 2F',kph:'610',kpv:'21',xp:'3,7M/h',s:'Tranquila'},{m:'Route 12',kph:'580',kpv:'33',xp:'3,2M/h',s:'Tranquila'},{m:'Mt. Moon',kph:'500',kpv:'8',xp:'2,9M/h',s:'Segura'}],nome:'Conta 3',nv:156,estado:'hunt',hunt:'Victory Road 2F',xph:'3,7M',tw:false,lives:[0,0,0],auto:true,bola:{on:false,tipo:'Poke Ball',teto:500,gat:100,lote:100},poc:{on:false,tipo:'Potion',teto:200,gat:100,lote:100},mapa:{on:true,risco:'baixo'},cor:'#fbbf24',mons:['#34d399','#3b82f6']},
+ {id:4,pers:{pk:'Pidgeotto',nv:98,iv:'20 / 22 / 25',ref:'0',tm:'não',aoe:'não',pb:'Potion / Poke',bon:'0%'},top:[{m:'Route 12',kph:'400',kpv:'40',xp:'0,9M/h',s:'Tranquila'},{m:'Route 10',kph:'380',kpv:'35',xp:'0,8M/h',s:'Tranquila'},{m:'Viridian Forest',kph:'300',kpv:'30',xp:'0,6M/h',s:'Tranquila'}],nome:'Conta 4',nv:98,estado:'hunt',hunt:'Route 12',xph:'0,9M',tw:true,twLogin:'conta4_tv',mons:['#a78bfa'],lives:[0,0,0],auto:false,bola:{on:false,tipo:'Poke Ball',teto:500,gat:100,lote:100},poc:{on:false,tipo:'Potion',teto:200,gat:100,lote:100},mapa:{on:false,risco:'baixo'},cor:'#f87171',mons:[]}
+];
+const $=s=>document.querySelector(s);
+let foco=null, painel=null, menu=null;
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),1600)}
+
+function slotHTML(c){
+ const lv=LIVES.map((l,i)=>`<div class="live"><span class="l" style="${c.lives[i]?'':'background:var(--muted)'}"></span><span class="nm">${l.n}</span><span class="bn">${l.b}</span><span class="st">${c.lives[i]?'dentro':'fora'}</span></div>`).join('');
+ const n=c.lives.reduce((a,b)=>a+b,0);
+ const mons=c.mons.map((m,i)=>`<div class="mon" style="left:${30+i*22}%;background:${m};opacity:.85"></div>`).join('');
+ const car='<svg class="car" viewBox="0 0 12 12"><path d="M2 8l4-4 4 4"/></svg>';
+ const chip=(k,nome,o,res)=>`<button class="am ${o.on?'on':''} ${painel===c.id+k?'open':''}" data-am="${c.id}|${k}"><i></i>${nome} <b>${o.on?res:'off'}</b>${car}</button>`;
+ return `
+ <div class="head" data-dbl="${c.id}">
+  <span class="dot ${c.alerta?'bad':c.estado}"></span>
+  <span class="nome">${c.nome}<small>Nv ${c.nv}</small></span>
+  <span class="hunt-i">${c.hunt} · <b>${c.xph}</b> XP/h</span>
+  <span class="sp"></span>
+  <span class="tw-wrap">
+   <button class="ib tw ${c.tw&&n?'':'off'}" title="Twitch">${ICON.tw}${c.tw&&n?`<span class="n">${n}</span>`:''}</button>
+   <div class="pop"><h4>Lives oficiais abertas</h4>${c.tw?lv:'<div class="live"><span class="st">Twitch não vinculada. Use a engrenagem.</span></div>'}
+    <div class="auto ${c.tw?'':'off-box'}"><label class="sw" style="flex:1;font-weight:500"><span>Entrar sozinho nas lives</span><input type="checkbox" ${c.auto?'checked':''} data-auto="${c.id}"><span class="tg"></span></label></div></div>
+  </span>
+  <button class="ib" data-gear="${c.id}" title="Conta">${ICON.gear}</button>
+  <button class="ib" data-max="${c.id}" title="${foco===c.id?'Reduzir':'Expandir'}">${foco===c.id?ICON.min:ICON.max}</button>
+  <div class="menu ${menu===c.id?'on':''}"><h4>Conta</h4>
+   <div class="st">Twitch: <b>${c.tw?'vinculada · '+c.twLogin:'não vinculada'}</b></div>
+   ${c.tw?`<button class="un" data-unlink="${c.id}">Desvincular Twitch</button>`:`<button class="tw-b" data-link="${c.id}">Vincular Twitch</button>`}
+  </div>
+ </div>
+ <div class="game"><div class="ph">área do jogo (WebContentsView)</div>${mons}</div>
+ <div class="panel ${painel&&painel[0]==c.id?'on':''}">${painel&&painel[0]==c.id?panelHTML(c,painel.slice(1)):''}</div>
+ <div class="bar">
+  ${chip('bola','Bola',c.bola,c.bola.tipo.split(' ')[0]+' < '+c.bola.gat)}
+  ${chip('poc','Poção',c.poc,c.poc.tipo.split(' ')[0]+' < '+c.poc.gat)}
+  ${chip('mapa','Mapa',c.mapa,'top 1')}
+  <span class="sp"></span>
+  <label class="sw master-c"><span>Automação</span><input type="checkbox" data-master="${c.id}" ${(c.bola.on||c.poc.on||c.mapa.on)?'checked':''}><span class="tg"></span></label>
+ </div>`;
+}
+function panelHTML(c,k){
+ const sw=(kk,t,v)=>`<label class="sw" style="gap:12px"><span>${t}</span><input type="checkbox" data-k="${kk}" ${v?'checked':''}><span class="tg"></span></label>`;
+ if(k==='mapa'){const o=c.mapa,p=c.pers;
+  return `<div class="ph2"><span>Trocar de mapa sozinho</span>${sw('mapa.on','Ligado',o.on)}</div>
+  <div class="map2">
+   <div class="col"><h5>Meu personagem</h5>
+    <div class="mon-h"><div class="ic" style="background:${c.mons[0]||'#26314d'}55"></div><div><b>${p.pk}</b><div class="hint" style="margin:0">Nv ${p.nv} · treinador ${c.nv}</div></div></div>
+    <div class="kv"><span>IVs</span><b>${p.iv}</b><span>Refino</span><b>${p.ref}</b><span>TM elemental</span><b>${p.tm}</b><span>AoE</span><b>${p.aoe}</b><span>Poção / Bola</span><b>${p.pb}</b><span>Bônus XP</span><b>${p.bon}</b></div></div>
+   <div class="col"><h5>Top 3 mapas para ele</h5><div class="top3">${c.top.map((t,i)=>`<div class="t3 ${i?'':'first'}"><span class="n">${i+1}</span><div class="nm">${t.m}<small>${t.kph} kills/h · ${t.kpv} kills/vida</small></div><span class="xp">${t.xp}</span><span class="tag ${t.s=='Tranquila'?'':'seg'}">${t.s}</span>${t.m==c.hunt?'<span class="atual">atual</span>':''}</div>`).join('')}</div></div>
+  </div>
+  <div class="hint">Risco alto (aceita Segura e Tranquila). Troca sempre para o 1º lugar, só fora de combate. O alerta vermelho aparece mesmo com a troca desligada.</div>`}
+ const o=c[k],nome=k=='bola'?'Pokébola':'Poção';
+ const tipos=k=='bola'?['Poke Ball','Great Ball','Ultra Ball','Master Ball']:['Potion','Super Potion','Hyper Potion','Max Potion'];
+ return `<div class="ph2"><span>Compra de ${nome}</span>${sw(k+'.on','Ligado',o.on)}</div>
+  <div class="${o.on?'':'off-box'}"><div class="g4">
+   <div class="field">Tipo<select>${tipos.map(t=>`<option ${t==o.tipo?'selected':''}>${t}</option>`).join('')}</select></div>
+   <div class="field">Comprar quando abaixo de<input type="number" value="${o.gat}" data-k="${k}.gat"></div>
+   <div class="field">Lote por compra<input type="number" value="${o.lote}" data-k="${k}.lote"></div></div>
+  <div class="res" data-res="${k}">Quando ficar abaixo de <b>${o.gat}</b>, compra <b>${o.lote}</b>.</div></div>`;
+}
+function render(){
+ const g=$('#grid');g.className='grid'+(foco?' focus':'');
+ g.innerHTML=contas.map(c=>`<section class="slot ${c.alerta?'alert':''} ${foco===c.id?'big':''}" data-slot="${c.id}">${slotHTML(c)}</section>`).join('');
+ const s=$('#strip');s.className='strip'+(foco?' on':'');
+ s.innerHTML=contas.map(c=>`<div class="th ${foco===c.id?'cur':''}" data-th="${c.id}"><span class="dot ${c.alerta?'bad':c.estado}"></span><b>${c.nome}</b><span class="xp">${c.xph}</span></div>`).join('');
+  $('#alertaG').classList.toggle('on',contas.some(c=>c.alerta));
+}
+document.addEventListener('click',e=>{
+ if(!e.target.closest('.menu,[data-gear]')&&menu){menu=null;render()}
+ const t=e.target.closest('[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink]');
+ if(!t)return;
+ const d=t.dataset;
+ if(d.am){const [id,k]=d.am.split('|');painel=painel===id+k?null:id+k;menu=null;render()}
+ else if(d.gear){menu=menu===+d.gear?null:+d.gear;render()}
+ else if(d.max){foco=foco===+d.max?null:+d.max;painel=null;menu=null;render()}
+ else if(d.th){foco=+d.th;painel=null;render()}
+ else if(d.link){const c=contas.find(x=>x.id==+d.link);c.tw=true;c.twLogin='conta'+c.id+'_tv';menu=null;render();toast('Aqui abre a autorização da Twitch (chat:read)')}
+ else if(d.unlink){const c=contas.find(x=>x.id==+d.unlink);c.tw=false;c.lives=[0,0,0];menu=null;render();toast('Twitch desvinculada, IRC desconectado')}
+});
+document.addEventListener('dblclick',e=>{const h=e.target.closest('[data-dbl]');if(h&&!e.target.closest('button,.pop')){const id=+h.dataset.dbl;foco=foco===id?null:id;painel=null;render()}});
+document.addEventListener('change',e=>{
+ const d=e.target.dataset;
+ if(d.master){const c=contas.find(x=>x.id==+d.master),v=e.target.checked;c.bola.on=c.poc.on=c.mapa.on=v;render();return}
+ if(d.auto){contas.find(x=>x.id==+d.auto).auto=e.target.checked;return}
+ const k=d.k;if(!k)return;
+ const [kk,f]=k.split('.');const c=contas.find(x=>x.id==+painel[0]);
+ if(f==='on'){c[kk].on=e.target.checked;render();return}
+ c[kk][f]=+e.target.value;
+ const res=document.querySelector('.panel.on [data-res="'+kk+'"]');
+ if(res)res.innerHTML=`Quando ficar abaixo de <b>${c[kk].gat}</b>, compra <b>${c[kk].lote}</b>.`;
+ render();
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){if(painel||menu){painel=null;menu=null;render()}else if(foco){foco=null;render()}}
+ if(/^[1-4]$/.test(e.key)&&!e.target.matches('input,select')){foco=+e.key;painel=null;render()}
+});
+$('#ligaTudo').onclick=()=>{contas.forEach(c=>{c.bola.on=c.poc.on=c.mapa.on=true});render();toast('Todas as automações ligadas')};
+$('#desligaTudo').onclick=()=>{contas.forEach(c=>{c.bola.on=c.poc.on=c.mapa.on=false});render();toast('Todas as automações desligadas')};
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PokeIdle Helper</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <div class="logo">Poké<b>Idle</b> Helper</div>
+      <div class="sub"><span id="nick"></span> <span id="status">Abra o pokeidle.io</span></div>
+    </div>
+    <label class="master" title="Chave geral: nada é enviado ao jogo enquanto estiver desligada">
+      <input type="checkbox" id="master"><span>Automação</span>
+    </label>
+  </header>
+  <div class="confirm" id="confirm-on" hidden>
+    <b>Ligar a automação?</b>
+    <p id="confirm-txt"></p>
+    <div class="btns"><button id="confirm-sim" class="primary">Ligar</button><button id="confirm-nao" class="ghost">Cancelar</button></div>
+  </div>
+  <div class="banner" id="banner" hidden></div>
+
+  <nav class="tabs">
+    <button data-tab="hunts" class="on">Onde caçar</button>
+    <button data-tab="auto">Automação</button>
+    <button data-tab="log">Log</button>
+  </nav>
+
+  <main>
+    <section id="tab-hunts" class="tab on">
+      <div class="pk-pick">
+        <span id="hunt-pk-ico" class="pk-ico"></span>
+        <select id="hunt-pk" aria-label="Pokémon"></select>
+      </div>
+      <div class="ctl-row">
+        <label class="field inline">Ordenar<select id="hunt-ordem"><option value="pk">XP pokémon</option><option value="tr">XP treinador</option><option value="ouro">Ouro</option></select></label>
+        <label class="check"><input type="checkbox" id="hunt-risco"> onde ele morre</label>
+      </div>
+      <div class="fonte small" id="hunt-fonte"></div>
+      <div class="alerta-box" id="hunt-alerta" hidden></div>
+      <div class="box small" id="hunt-agora">—</div>
+      <table class="list hunts"><thead><tr><th>Hunt</th><th class="r">XP/h<div class="hs">pokémon · treinador</div></th><th class="r">$/h<div class="hs">ouro+loot+capt.</div></th><th></th></tr></thead>
+        <tbody id="hunt-lista"><tr><td colspan="4" class="empty">Calculando…</td></tr></tbody></table>
+      <p class="hint" id="hunt-nota">Mesma conta e mesmos dados da aba Onde caçar do guia (guiapokeidlehardtocapture.site): a ficha do pokémon sai do jogo (nível, qualidade, potência, IVs, refino, TMs, auto-poção, bike, VIP, boosts, guild, Twitch) e a lista usa o filtro "segura" e a ordem por XP/h do guia. Marque "onde ele morre" para o filtro "arriscada". O ✓ mostra os kills/h que você mediu jogando, só para comparar. "Ir" troca de hunt quando você sai de combate.</p>
+    </section>
+
+    <section id="tab-auto" class="tab">
+      <h3>Compra automática</h3>
+      <p class="hint">Cada regra: <b>quando tiver menos de X, comprar Y</b>. Só compra com a chave geral
+        <b>e</b> a regra ligadas.</p>
+      <div id="regras"></div>
+      <div class="add">
+        <select id="novo-ref"></select>
+        <button id="novo-add">+ Regra</button>
+      </div>
+
+      <h3>Trocar de hunt sozinho</h3>
+      <p class="hint">Quando aparece uma hunt melhor (o pokémon em campo subiu de nível, o treinador liberou hunt nova…),
+        ele troca sozinho assim que sai de combate, tentando a cada 5 s. Precisa da chave geral ligada.</p>
+      <label class="check"><input type="checkbox" id="ah-on"> Trocar de hunt sozinho</label>
+      <div class="lims">
+        <label class="field">Melhor por<select id="ah-criterio"><option value="pk">XP do pokémon</option><option value="tr">XP do treinador</option><option value="ouro">Ouro</option></select></label>
+        <label class="field">Hunts aceitas<select id="ah-risco"><option value="baixo">só Tranquila (≥20 kills/vida)</option><option value="alto">Segura (≥5 kills/vida, como o guia)</option></select></label>
+        <label class="field">Só troca se render pelo menos (%) a mais<input type="number" min="0" max="500" step="1" id="ah-ganho"></label>
+      </div>
+
+      <h3>Limites de segurança</h3>
+      <p class="hint">Valem para todas as regras de compra.</p>
+      <div class="lims">
+        <label class="field">Gastar no máximo, por hora (0 = sem limite)<input type="number" min="0" step="100" id="lim-hora"></label>
+        <label class="field">Nunca deixar o ouro abaixo de<input type="number" min="0" step="100" id="lim-reserva"></label>
+      </div>
+      <p class="hint" id="gasto"></p>
+    </section>
+
+    <section id="tab-log" class="tab">
+      <div class="row-end"><button id="log-clear" class="ghost">Limpar</button></div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="../content/defaults.js"></script>
+  <script src="../content/fmt.js"></script>
+  <script src="hunts.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

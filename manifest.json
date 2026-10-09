@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "PokeIdle Helper",
+  "version": "0.9.3",
+  "description": "Onde caçar, compra automática e troca de hunt para o pokeidle.io. Funciona sozinha (Chrome, Edge, Brave, Opera). Tudo que age no jogo começa desligado.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://pokeidle.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "PokeIdle Helper"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pokeidle.io/*"
+      ],
+      "js": [
+        "page/proto.js",
+        "page/inject.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://pokeidle.io/*"
+      ],
+      "js": [
+        "content/defaults.js",
+        "content/fmt.js",
+        "content/bridge.js",
+        "sidepanel/hunts.js",
+        "content/autohunt.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "data/especies.json",
+        "data/guia.json"
+      ],
+      "matches": [
+        "https://pokeidle.io/*"
+      ]
+    }
+  ]
+}

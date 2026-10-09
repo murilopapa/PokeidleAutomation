@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://raw.githubusercontent.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'">
+<title>PokeIdle Multi</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div class="top">
+  <div><div class="logo">PokeIdle <b>Multi</b></div><div class="sub" id="sub">até 4 contas · cada uma com sua sessão</div></div>
+  <span class="sp"></span>
+  <div class="alerta-g" id="alertaG"></div>
+  <div class="modos" id="modos" role="group" aria-label="Modo de economia (todas as contas)">
+    <button data-modo="normal" title="Cena do jogo ligada em todas as contas">Normal</button>
+    <button data-modo="eco" title="Liga o Modo Economia do jogo (o botão da bateria) em todas as contas: para de desenhar o mapa e os pokémon andando. A caça continua igual.">Eco</button>
+    <button data-modo="ultra" title="Eco + o app para de desenhar os jogos: tela preta com o resumo das contas. O mais leve; tudo continua rodando.">Ultra eco</button>
+  </div>
+  <div class="layouts" id="layouts"></div>
+  <div class="chip">RAM <b id="ram">—</b></div>
+  <button id="ligaTudo" class="primary">Ligar tudo</button>
+  <button id="desligaTudo">Desligar tudo</button>
+  <button id="att" class="att" title="Clique para procurar atualização"></button>
+</div>
+<div class="stage"><div class="grid" id="grid"></div><div id="divs"></div><div id="kkpainel"></div><div id="ultra"></div><div class="vazio-g" id="vazio">Todas as contas estão desligadas. Ligue uma na barra abaixo.</div></div>
+<div class="kdock" id="kdock"></div>
+<div class="offbar" id="offbar"></div>
+<div class="strip" id="strip"></div>
+<div class="toast" id="toast"></div>
+<script src="shim.js"></script>
+<script src="../vendor/defaults.js"></script>
+<script src="../vendor/fmt.js"></script>
+<script src="../vendor/hunts.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

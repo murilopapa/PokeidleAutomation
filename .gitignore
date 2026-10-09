@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.exe
+*.zip
+app-multiconta/app/test/out/
+package-lock.json
