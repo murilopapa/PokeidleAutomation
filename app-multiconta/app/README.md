@@ -69,9 +69,9 @@ Procura 20 s depois de abrir e a cada 3 h; também dá para clicar na versão (c
 baixa o instalador em segundo plano (conferindo o sha256) e aparece **Atualizar para X**. O
 clique fecha o app, instala sem telas e abre de novo (uns 20 s). Logins e configurações ficam.
 
-**Publicar uma versão:** suba `version` no `package.json` e rode `sh tools/publicar.sh`
-(gera o instalador e cria a versão `vX.Y.Z` com o .exe anexado, pelo `gh`). Ou na mão: no GitHub,
-Releases → Draft a new release → tag `v0.6.1` → anexe `PokeIdle-Multi-Instalador-0.6.1.exe`.
+**Publicar uma versão:** suba `version` no `package.json`, faça commit e push, e rode
+`sh tools/publicar.sh "o que mudou"` (ou crie a tag `vX.Y.Z` no GitHub). O GitHub Actions
+(`.github/workflows/release.yml`) gera o instalador e cria a Release com o .exe em ~3 min.
 A tag tem que ser maior que a versão instalada.
 
 ## Twitch (bônus de XP)

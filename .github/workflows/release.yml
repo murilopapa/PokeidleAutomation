@@ -1,0 +1,36 @@
+# Publica o instalador do PokeIdle Multi quando uma tag vX.Y.Z é enviada.
+# A tag tem que bater com "version" do app-multiconta/app/package.json.
+# Os apps instalados acham a versão nova nas Releases e se atualizam.
+name: Publicar instalador
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  instalador:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-multiconta/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: NSIS
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      - name: Confere versão
+        run: |
+          V=$(node -p "require('./package.json').version")
+          [ "v$V" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME diferente da versão $V do package.json"; exit 1; }
+          echo "VERSAO=$V" >> "$GITHUB_ENV"
+      - name: Gera o instalador
+        run: sh tools/build-win.sh
+      - name: Publica a Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTAS=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+          gh release create "$GITHUB_REF_NAME" "dist/PokeIdle-Multi-Instalador-$VERSAO.exe" \
+            --title "PokeIdle Multi $VERSAO" --notes "${NOTAS:-Versão $VERSAO}"

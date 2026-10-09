@@ -1,13 +1,11 @@
 #!/bin/sh
-# Gera o instalador e publica uma versão nova no GitHub Releases. Os apps instalados acham
-# sozinhos (a cada 3 h, ou no botão da versão no canto de cima) e baixam.
-# Antes: suba o número em package.json ("version") e confira "atualizacao.repo".
-# Precisa: o mesmo do build-win.sh + GitHub CLI (gh) logado (`gh auth login`).
+# Publica uma versão nova: cria a tag vX.Y.Z e envia. O GitHub Actions
+# (.github/workflows/release.yml) gera o instalador e cria a Release sozinho.
+# Antes: suba "version" no package.json, faça commit e push.
+# Uso: sh tools/publicar.sh "o que mudou nesta versão"
 set -e
 cd "$(dirname "$0")/.."
 VERSAO=$(node -p "require('./package.json').version")
-REPO=$(node -p "require('./package.json').atualizacao.repo")
-[ -n "$REPO" ] || { echo "preencha atualizacao.repo no package.json (ex.: murilo/pokeidle-multi)"; exit 1; }
-sh tools/build-win.sh
-gh release create "v$VERSAO" "dist/PokeIdle-Multi-Instalador-$VERSAO.exe" --repo "$REPO" --title "PokeIdle Multi $VERSAO" --notes "${NOTAS:-Versão $VERSAO}"
-echo "publicado: v$VERSAO em $REPO"
+git tag -a "v$VERSAO" -m "${1:-Versão $VERSAO}"
+git push origin "v$VERSAO"
+echo "tag v$VERSAO enviada: acompanhe em Actions; a Release sai em ~3 min"
