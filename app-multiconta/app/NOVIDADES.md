@@ -1,3 +1,4 @@
-- Ultra eco mostra só as contas ligadas, com o pokémon farmando e o lugar
-- Versão no canto de cima só diz se tem atualização ou não
-- Saíram os botões Ligar tudo / Desligar tudo
+- Golden Potion: aparece na compra automática e entra no cálculo de onde caçar (cura em % do HP)
+- Preço das poções na compra agora é o que a loja do jogo cobra de verdade
+- Bônus de XP da Kick entra no cálculo de onde caçar
+- Kick na barra de cima: Farmar, Resgatar e Player leve de uma vez em todas as contas logadas

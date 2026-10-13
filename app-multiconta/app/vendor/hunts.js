@@ -39,6 +39,18 @@ var PieHunt = (() => {
   const WILD_POOL_FATOR = 1.4;
   const POCOES = { 200: { heal: 60, price: 5 }, 201: { heal: 150, price: 10 }, 202: { heal: 400, price: 22 }, 203: { heal: 1000, price: 55 }, 204: { heal: 3000, price: 135 } };
   const BOLA_ULTRA = 4;
+  // Poção fora da tabela do guia (itens próprios do jogo): cura fixa ou % do HP, preço da loja.
+  function pocaoDe(id, catalog) {
+    if (POCOES[id]) return POCOES[id];
+    const it = catalog?.items?.[id];
+    if (!it || it.category !== 'heal') return null;
+    const pct = Number(it.healPct) > 0 ? Number(it.healPct) : 0;
+    const heal = Number(it.healAmount) > 0 ? Number(it.healAmount) : 0;
+    if (!pct && !heal) return null;
+    const loja = (catalog.compraveis ?? []).find((x) => x.itemId === id)?.preco;
+    const price = Number(it.priceGold) || Number(loja) || Number(it.npcPrice) || 0;
+    return pct ? { pct, price, nome: it.name } : { heal, price, nome: it.name };
+  }
   const BIKE = { comum: 0.15, incomum: 0.25, rara: 0.5, mitica: 0.75, lendaria: 1 };
   const E_QUALIDADE = 1.1766;
   const EXPO_OURO = Math.log(6000 / 36) / Math.log(5000);
@@ -96,11 +108,17 @@ var PieHunt = (() => {
     const agora = Date.now();
     const auto = snap?.gameAuto ?? {};
     const ativo = (k) => (Number(b.boosts?.[k]) || 0) > agora;
-    // poção: a mais forte das escolhidas na auto-poção do jogo (o guia usa Ultimate de padrão)
-    let pocao = '0';
+    // poção: a mais forte das escolhidas na auto-poção do jogo (o guia usa Ultimate de padrão).
+    // As do guia (200–204) têm cura fixa; as próprias do jogo (Golden Potion…) vêm do catálogo e
+    // podem curar % do HP — aí "mais forte" é pela cura neste pokémon.
+    let pocao = '0', pocaoExtra = null;
     if (auto.autoPotion) {
-      const ids = (auto.potionIds ?? []).map(Number).filter((id) => POCOES[id]);
-      pocao = String(ids.length ? Math.max(...ids) : 204);
+      const hp = Number(pk.maxHp) || Math.max(24, (Number(pk.stats?.hp) || 0) * 12);
+      const cands = (auto.potionIds ?? []).map(Number).map((id) => ({ id, p: pocaoDe(id, catalog) })).filter((x) => x.p);
+      const forca = (p) => (p.pct ? p.pct * hp : p.heal);
+      cands.sort((a, b) => forca(b.p) - forca(a.p) || b.id - a.id);
+      pocao = String(cands.length ? cands[0].id : 204);
+      if (cands.length && !POCOES[cands[0].id]) pocaoExtra = cands[0].p;
     }
     // bola: a de maior captura entre as do auto-bola; sem auto-bola, Ultra (padrão do guia)
     let ballCr = BOLA_ULTRA;
@@ -123,13 +141,15 @@ var PieHunt = (() => {
       ivs, refino,
       tm: !!pk.tmElemental,
       aoe: pk.tmAoe === true || pk.tmAoe === 'true' || pk.tmAoe === 1,
-      pocao, ballCr,
+      pocao, pocaoExtra, ballCr,
       vip: (b.vipAte || 0) > agora,
       boost: ativo('pokexp'),
       boostTr: ativo('xp'),
       guild: Number(b.guildBonusPct) || 0,
       evento: (b.guildBoostAte || 0) > agora ? 10 : 0, // Boost da Guild (+10%) entra como evento
       twitch: Number(b.twitchPct) || 0,
+      // Kick: hora de bônus de XP resgatada com pontos do canal (vale para pokémon e treinador).
+      kick: kickXpPct(snap, agora),
       bike: BIKE[b.bicicleta] ?? 0,
     };
   }
@@ -139,11 +159,11 @@ var PieHunt = (() => {
     const mult = (1 + BONUS_POT[c.pot - 1]) * (c.shiny ? MULT_SHINY : 1);
     const stats = {};
     STATS.forEach((k, i) => { stats[k] = statNasc(esp.b[i] + (c.refino[k] ?? 0), c.ivs[k], c.nivel, c.q, EXPO_Q[k], mult); });
-    const comum = (c.vip ? 1.5 : 1) * (1 + c.guild / 100) * (1 + c.evento / 100) * (1 + c.twitch / 100);
+    const comum = (c.vip ? 1.5 : 1) * (1 + c.guild / 100) * (1 + c.evento / 100) * (1 + c.twitch / 100) * (1 + (c.kick || 0) / 100);
     return {
       esp, nome: esp.n, t: esp.t, nivel: c.nivel, stats, ivs: c.ivs,
       golpes: esp.m.filter((m) => m[5] <= c.nivel).map((m) => ({ nome: m[0], tipo: m[1], cat: m[2], p: m[3], cd: m[4] })),
-      tm: c.tm, aoe: c.aoe, pocao: POCOES[+c.pocao] || null, ballCr: c.ballCr,
+      tm: c.tm, aoe: c.aoe, pocao: POCOES[+c.pocao] || c.pocaoExtra || null, ballCr: c.ballCr,
       xpBonus: comum * (c.boost ? 1.5 : 1),
       xpBonusTrein: comum * (c.boostTr ? 1.5 : 1),
       guildPct: c.guild,
@@ -282,7 +302,8 @@ var PieHunt = (() => {
       venda += w * cc * precoVenda(s, nivelCaptura(h.nv, s.tc), E_QUALIDADE);
     }
     loot *= guildMult;
-    const pocoesH = poke.pocao && !inviavel ? (danoPorKill * kphEff) / poke.pocao.heal : 0;
+    const curaPocao = poke.pocao ? (poke.pocao.pct ? poke.pocao.pct * hpPoke : poke.pocao.heal) : 0;
+    const pocoesH = poke.pocao && !inviavel ? (danoPorKill * kphEff) / Math.max(1e-6, curaPocao) : 0;
     const custoPocaoH = poke.pocao ? pocoesH * poke.pocao.price : 0;
     const xpK = xpKillHunt(h);
     const lo = Math.min(kph, kphOndaMin(h)) * uptime * xpK * poke.xpBonus;
@@ -355,6 +376,11 @@ var PieHunt = (() => {
     return ajustar(await simular(pk, catalog, nivelTreinador, opts.snap ?? null), opts.snap ?? null, catalog, opts);
   }
 
+  const kickXpPct = (snap, agora = Date.now()) => {
+    const k = snap?.kick;
+    return k && agora < (Number(k.bonus?.xp) || 0) ? Number(k.pct) || 0 : 0;
+  };
+
   // Bônus de XP do jogo (só para mostrar no painel; a conta usa a ficha do guia).
   function multiplicadores(snap, catalog, agora = Date.now()) {
     const b = snap?.bonus ?? {};
@@ -376,8 +402,11 @@ var PieHunt = (() => {
     if (gBoost > 1) partes.push({ nome: 'Boost da Guild', mult: 1.1, ate: b.guildBoostAte, alvo: 'ambos' });
     const twitch = 1 + (b.twitchPct || 0) / 100;
     if (twitch > 1) partes.push({ nome: `Bônus Twitch (+${String(b.twitchPct).replace('.', ',')}%)`, mult: twitch, ate: null, alvo: 'ambos' });
-    const tr = boost('xp') * vip * guild * gBoost * twitch;
-    const pk = boost('pokexp') * vip * guild * gBoost * twitch;
+    const kp = kickXpPct(snap, agora);
+    const kick = 1 + kp / 100;
+    if (kick > 1) partes.push({ nome: `Bônus Kick (+${String(kp).replace('.', ',')}%)`, mult: kick, ate: Number(snap.kick.bonus.xp), alvo: 'ambos' });
+    const tr = boost('xp') * vip * guild * gBoost * twitch * kick;
+    const pk = boost('pokexp') * vip * guild * gBoost * twitch * kick;
     const medPk = Number(snap?.multXp) || null;
     const medTr = Number(snap?.multXpTr) || null;
     return { tr: medTr || tr, pk: medPk || pk, calcTr: tr, calcPk: pk, medido: !!(medPk || medTr), partes };

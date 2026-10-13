@@ -88,6 +88,11 @@
     if (m.t === P.in.welcome) {
       S.mesclar = criarMesclador();
       S.eu = S.mesclar(m.estado);
+      // Itens próprios do jogo (Golden Potion e cia.) só vêm no welcome, não no items.json; e o
+      // preço que a loja cobra de verdade também vem daqui (itensCompraveis).
+      S.nossos = Array.isArray(m.itensNossos) ? m.itensNossos : [];
+      S.precoLoja = new Map((m.itensCompraveis ?? []).map((x) => [Number(x.itemId), Number(x.preco) || 0]));
+      montarItens();
       S.catalog = {
         at: Date.now(),
         hunts: m.hunts ?? [],
@@ -175,12 +180,28 @@
   }
   setInterval(processarTroca, 250);
 
-  // A loja de itens do NPC: cura e revive com preço de NPC (mesmo filtro da tela de compra do jogo).
+  // A loja de itens do NPC: cura e revive (mesmo filtro da tela de compra do jogo: npcPrice > 0),
+  // com o preço que o SERVIDOR cobra (itensCompraveis do welcome); sem ele, o npcPrice.
   function lojaDeItens() {
     if (!S.items) return [];
     return Object.entries(S.items)
-      .filter(([, i]) => (i.category === 'heal' || i.category === 'revive') && i.npcPrice > 0)
-      .map(([id, i]) => ({ itemId: Number(id), preco: i.npcPrice }));
+      .filter(([id, i]) => (i.category === 'heal' || i.category === 'revive') && (i.npcPrice > 0 || S.precoLoja?.get(Number(id)) > 0))
+      .map(([id, i]) => ({ itemId: Number(id), preco: S.precoLoja?.get(Number(id)) || i.npcPrice }))
+      .sort((a, b) => a.itemId - b.itemId);
+  }
+
+  const itemResumo = (i) => ({
+    name: i.name, category: i.category, npcPrice: i.npcPrice ?? null, priceGold: i.priceGold ?? null,
+    healAmount: i.healAmount ?? null, healPct: i.healPct ?? null, revivePct: i.revivePct ?? null,
+  });
+  // items.json (espelho) + itens próprios do welcome, no mesmo mapa (como o jogo faz).
+  let itensJson = null;
+  function montarItens() {
+    if (!itensJson) return;
+    const map = { ...itensJson };
+    for (const i of S.nossos ?? []) if (i?.id != null) map[i.id] = itemResumo(i);
+    S.items = map;
+    if (S.catalog) { S.catalog.items = map; S.catalog.compraveis = lojaDeItens(); post('catalog', { catalog: S.catalog }); }
   }
 
   // Nomes e categorias dos itens (arquivo público do jogo).
@@ -188,9 +209,9 @@
     .then((r) => r.json())
     .then((j) => {
       const map = {};
-      for (const i of j.items ?? []) map[i.id] = { name: i.name, category: i.category, npcPrice: i.npcPrice ?? null, healAmount: i.healAmount ?? null };
-      S.items = map;
-      if (S.catalog) { S.catalog.items = map; S.catalog.compraveis = lojaDeItens(); post('catalog', { catalog: S.catalog }); }
+      for (const i of j.items ?? []) map[i.id] = itemResumo(i);
+      itensJson = map;
+      montarItens();
     })
     .catch(() => log('não consegui carregar items.json', 'warn'));
 

@@ -249,6 +249,27 @@ check('resgate automático (canais com pontos, inclusive offline)', /KICK REDEEM
 await ui.keyboard.press('Escape');
 await sleep(300);
 
+// Kick global (barra de cima): atalho para todas as contas logadas na Kick
+const kkg = () => ui.$$eval('#kkg button', (e) => e.map((b) => b.dataset.kkg + ':' + (b.className || 'off') + (b.disabled ? ':dis' : '')));
+const g0 = await kkg();
+check('Kick global aparece com as contas logadas (farmar e resgatar ligados, player leve)', g0.join() === 'ligado:on,auto:on,leve:on', g0.join());
+await ui.click('#kkg [data-kkg="leve"]'); await sleep(4000);
+const urlsCompl = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()).filter((u) => u.includes('/kick/')));
+check('Kick global: Player leve desligado troca para a página completa', (await kkg()).includes('leve:off') && urlsCompl.length === 2 && urlsCompl.every((u) => !u.includes('?muted')), JSON.stringify(urlsCompl));
+await ui.click('#kkg [data-kkg="leve"]'); await sleep(4000);
+await ui.click('#kkg [data-kkg="ligado"]'); await sleep(4000);
+const urlsOff = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()).filter((u) => u.includes('/kick/')));
+check('Kick global: Farmar desligado fecha os players de todas', (await kkg()).includes('ligado:off') && urlsOff.length === 0, JSON.stringify(urlsOff));
+await shot('kick-global.png');
+await ui.click('#kkg [data-kkg="ligado"]'); await sleep(3000);
+check('Kick global: Farmar liga de novo', (await kkg()).includes('ligado:on'), (await kkg()).join());
+
+// Golden Potion: item próprio do jogo (welcome), preço do servidor e cura em %
+const gp = await ui.evaluate(() => S.map((s) => ({ nick: s.snap?.nick, ops: opcoes(S.indexOf(s), 'item').map((o) => o.nome + '=' + o.preco).join(','), poc: s.res?.ficha?.pocao, extra: s.res?.ficha?.pocaoExtra })));
+const gSeg = gp.find((x) => x.nick === 'segunda'), gMu = gp.find((x) => x.nick === 'murilo');
+check('Golden Potion aparece na compra com o preço do servidor', gp.every((x) => /Golden Potion=4000/.test(x.ops)) && gp.every((x) => /Small Potion=50/.test(x.ops)), JSON.stringify(gp.map((x) => x.ops)));
+check('ficha usa a Golden Potion quando ela está na auto-poção (cura 100%)', gSeg?.poc === '90001' && gSeg?.extra?.pct === 1 && gMu?.poc === '201', JSON.stringify([gSeg, gMu]));
+
 // zoom manual do jogo pela engrenagem
 await ui.click('.slot[data-slot="1"] [data-gear="1"]'); await sleep(600);
 const z0 = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().filter((w) => w.getURL().includes('8787/app')).map((w) => w.getZoomFactor()));

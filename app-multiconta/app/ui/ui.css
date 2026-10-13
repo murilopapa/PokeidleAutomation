@@ -334,3 +334,12 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .att.baixa{color:var(--fg)}
 .att.erro{color:var(--bad)}
 .u-cab > :nth-child(5){text-align:right}
+
+/* Kick global (barra de cima) */
+.kkg{align-items:center}
+.kkg .kkg-t{display:inline-flex;align-items:center;padding:0 4px 0 8px;color:#53fc18}
+.kkg .kkg-t svg{width:14px;height:14px}
+.kkg button.on{background:var(--card2);color:#53fc18;box-shadow:inset 0 0 0 1px #53fc18}
+.kkg button.meio{color:var(--fg);box-shadow:inset 0 0 0 1px var(--line);background:linear-gradient(90deg,rgba(83,252,24,.18) 50%,transparent 50%)}
+.kkg button:disabled{opacity:.45;cursor:default}
+.kkg.vazio{opacity:.6}

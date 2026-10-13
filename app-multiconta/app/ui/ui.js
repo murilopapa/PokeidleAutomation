@@ -79,7 +79,8 @@ async function calcular(i) {
   const snap = s.snap, catalog = s.catalog;
   const pk = (snap?.team ?? []).find((p) => p.id === snap?.activeId);
   if (!pk || !catalog?.combate || !snap?.ready) { s.res = null; s.top = []; s.alerta = null; s.rAtual = null; s.pk = pk || null; return; }
-  if (s.calc) return;
+  // Já calculando: refaz quando terminar (senão um catálogo/ficha que chegou no meio se perde).
+  if (s.calc) { s.denovo = true; return; }
   s.calc = true;
   try {
     const chave = [PieHunt.chaveFicha(pk, snap, catalog), snap.level, catalog.at].join('|');
@@ -92,7 +93,10 @@ async function calcular(i) {
     s.rAtual = lista.find((r) => r.hunt?.slug === snap.huntSlug) || null;
     s.alerta = PieHunt.decidir(lista, snap.huntSlug, AUTO_HUNT);
   } catch (e) { console.error(e); }
-  finally { s.calc = false; }
+  finally {
+    s.calc = false;
+    if (s.denovo) { s.denovo = false; agendarCalculo(i); }
+  }
 }
 let calcTimer = {};
 function agendarCalculo(i) {
@@ -345,7 +349,7 @@ function mapaHTML(i, sw, fechar) {
   const pers = `<div class="col"><h5>Meu personagem</h5>
     <div class="mon-h"><div class="ic">${retrato(pk.speciesId)}</div><div><b>${pk.shiny ? '✨ ' : ''}${esc(pk.nome)}</b><div class="hint" style="margin:0">Nv ${num(pk.level)} · treinador ${num(s.snap.level)}</div></div></div>
     <div class="kv"><span>IVs</span><b>${ivs}</b><span>Qualidade · Potência</span><b>${n1(f.q)} · P${f.pot}</b><span>Refino</span><b>${ref ? '+' + ref : '0'}</b>
-      <span>TM elemental · AoE</span><b>${f.tm ? 'sim' : 'não'} · ${f.aoe ? 'sim' : 'não'}</b><span>Poção</span><b>${POC[f.pocao] ?? f.pocao}</b>
+      <span>TM elemental · AoE</span><b>${f.tm ? 'sim' : 'não'} · ${f.aoe ? 'sim' : 'não'}</b><span>Poção</span><b>${POC[f.pocao] ?? f.pocaoExtra?.nome ?? f.pocao}</b>
       <span>Bônus XP</span><b>×${mult ? n1(mult.calcPk) : '1'}</b></div></div>`;
   const atual = s.snap.huntSlug;
   const top = s.top.length ? s.top.map((r, k) => `<div class="t3 ${k ? '' : 'first'}"><span class="n">${k + 1}</span><div class="nm">${esc(r.hunt.nome)}<small>${num(r.killsH)} kills/h · ${r.killsPorVida >= 99 ? '99+' : n1(r.killsPorVida)} kills/vida</small></div><span class="xp">${curto(r.xpH)}/h</span><span class="tag ${r.risco.txt === 'Tranquila' ? '' : 'seg'}">${r.risco.txt}</span>${r.hunt.slug === atual ? '<span class="atual">atual</span>' : ''}</div>`).join('')
@@ -616,8 +620,41 @@ function renderAtt() {
   b.title = tit;
 }
 
+// ---- Kick global (barra de cima): liga/desliga em todas as contas logadas na Kick de uma vez.
+// Cada conta continua com o seu painel K; aqui é só o atalho. Cinza = nenhuma, meio = algumas.
+const KKG = [
+  { campo: 'ligado', nome: 'Farmar', de: (k) => !!k.ligado, tit: 'Farmar pontos (player mudo) em todas as contas logadas na Kick' },
+  { campo: 'auto', nome: 'Resgatar', de: (k) => !!k.auto, tit: 'Resgatar sozinho em todas as contas logadas na Kick' },
+  { campo: 'leve', nome: 'Player leve', de: (k) => !k.completo, tit: 'Player leve (só vídeo, menos RAM) em todas. Desligado = página completa da Kick' },
+];
+const contasKick = () => Array.from({ length: N }, (_, i) => i).filter((i) => KK.contas[i]?.user && !S[i]?.desligada);
+function renderKickGlobal() {
+  const el = $('#kkg');
+  if (!el) return;
+  const cs = contasKick();
+  el.classList.toggle('vazio', !cs.length);
+  const html = `<span class="kkg-t" title="Kick: vale para todas as contas logadas na Kick (${cs.length})">${ICON.kk}</span>` + KKG.map((g) => {
+    const n = cs.filter((i) => g.de(KK.contas[i])).length;
+    const st = !cs.length || !n ? '' : n === cs.length ? 'on' : 'meio';
+    return `<button data-kkg="${g.campo}" class="${st}" ${cs.length ? '' : 'disabled'} title="${g.tit}${st === 'meio' ? ` (ligado em ${n} de ${cs.length}; clique liga em todas)` : ''}">${g.nome}</button>`;
+  }).join('');
+  if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
+}
+async function kickGlobal(campo) {
+  const g = KKG.find((x) => x.campo === campo), cs = contasKick();
+  if (!g || !cs.length) return;
+  const ligar = !cs.every((i) => g.de(KK.contas[i]));
+  for (const i of cs) {
+    if (g.de(KK.contas[i]) === ligar) continue;
+    if (campo === 'leve') await app.kick.set(i, 'completo', !ligar);
+    else await app.kick.set(i, campo, ligar);
+  }
+  toast(`${g.nome}: ${ligar ? 'ligado' : 'desligado'} em ${cs.length} conta${cs.length > 1 ? 's' : ''}`);
+}
+
 function renderTudo() {
   renderKkVer();
+  renderKickGlobal();
   $('#grid').classList.toggle('focus', foco != null);
   aplicarGrade();
   renderKickDock();
@@ -655,7 +692,7 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) { if (menu != null || painel) abrir({ menu: null, painel: null }); return; }
@@ -677,6 +714,8 @@ async function acaoClick(d, id, campos) {
     else if (ATT.fase === 'sem-repo') toast('Atualização automática ainda não configurada');
   } else if (id === 'alertaG') {
     if (d.i !== '') { foco = +d.i; painel = { i: +d.i, k: 'mapa' }; renderTudo(); abrir({}); }
+  } else if (d.kkg) {
+    await kickGlobal(d.kkg);
   } else if (d.kkver) {
     const [i, slug] = d.kkver.split('|');
     kkVer = kkVer && kkVer.i === +i && kkVer.slug === slug ? null : { i: +i, slug };
@@ -875,6 +914,7 @@ app.onRam((r) => {
 app.twitch.onEstado((e) => { TW = e; for (let i = 0; i < N; i++) renderSlot(i); });
 app.kick.onEstado((e) => {
   KK = e;
+  renderKickGlobal();
   const antes = kkVer;
   for (let i = 0; i < N; i++) renderSlot(i);
   renderKkVer();

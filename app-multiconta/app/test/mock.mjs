@@ -34,7 +34,7 @@ function estadoCheio(n) {
     loja: { vipAte: 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 0,
     huntSlug: n % 4 === 3 ? null : 'kadabra', noCentro: n % 4 === 3, activeId: 11,
     balls: { 1: 48, 2: 5 }, items: { 200: 30, 201: 4 },
-    automation: { autoPotion: true, autoBall: true, ballIds: [1], potionIds: [201] },
+    automation: { autoPotion: true, autoBall: true, ballIds: [1], potionIds: n % 4 === 1 ? [201, 90001] : [201] },
     twitch: {
       login: n === 0 ? 'murilo_tv' : null, aoVivo: true, assistindo: false, pct: 15, pctAtual: 0, extra: 2.5, assistindoEm: [],
       oficiais: [{ login: 'faasii', nome: 'faasii', bonus: true }, { login: 'parceiro1', nome: 'Parceiro 1', bonus: true }, { login: 'parceiro2', bonus: false }],
@@ -118,6 +118,9 @@ wssJogo.on('connection', (ws) => {
     catalogoBolas: [{ id: 1, nome: 'Poke Ball', priceGold: 10, compravel: true }, { id: 2, nome: 'Great Ball', priceGold: 50, compravel: true }, { id: 3, nome: 'Ultra Ball', priceGold: 120, compravel: true }],
     tabelaTipos: FX.tipos, ampliacaoHunt: 1.5, multHpSelvagem: 5, multDanoSelvagem: 1.8,
     captura: { base: 0.0075 }, chanceShiny: 0.001, tiposBoost: [],
+    // Item próprio do jogo (não está no items.json) e preços cobrados pelo servidor.
+    itensNossos: [{ id: 90001, name: 'Golden Potion', category: 'heal', npcPrice: 5000, healPct: 1 }],
+    itensCompraveis: [{ itemId: 200, preco: 50 }, { itemId: 201, preco: 150 }, { itemId: 90001, preco: 4000 }],
   }));
   ws.on('message', (raw) => {
     const m = JSON.parse(raw);

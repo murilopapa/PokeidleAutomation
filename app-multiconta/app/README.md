@@ -27,7 +27,7 @@ O login fica guardado por quadrado.
   Arraste o cabeçalho de uma conta e solte no de outra para trocar as duas de lugar; a 1ª fica
   com o espaço maior nos layouts de destaque.
 - **Barra de cima:** aviso vermelho quando alguma conta tem hunt melhor (clique para ver), modos de
-  economia, RAM do app e a versão (amarelo quando tem atualização).
+  economia, **Kick (todas as contas)**, RAM do app e a versão (amarelo quando tem atualização).
 - **Cabeçalho do quadrado:** conta, nível, hunt atual e XP/h. Botão **power**: desliga a conta
   (2 cliques; fecha o jogo dela, libera a RAM e sai do chat da Twitch). Fica lembrado ao reabrir. Contas desligadas saem da grade (as
   outras ganham o espaço) e ficam na barra "Desligadas" embaixo, com o botão Ligar. Ícone da Twitch (passe o mouse:
@@ -105,6 +105,10 @@ está **logado e assistindo**, e os pontos são de cada canal (só se gastam no 
    tempo. Abre e fecha sozinho conforme as lives começam e acabam.
 4. **Resgatar sozinho** + o tipo de bônus: assim que algum canal tiver pontos para o resgate, o app
    resgata (um por vez). Para resgatar na mão, abra a live grande e resgate na própria Kick.
+
+**Kick na barra de cima (todas as contas):** Farmar, Resgatar e Player leve ligam ou desligam de
+uma vez em todas as contas logadas na Kick. Verde = ligado em todas, meio verde = só em algumas
+(o clique liga em todas). O painel K de cada conta continua para ajustar uma só.
 
 O saldo de todos os canais oficiais fica salvo e é atualizado mesmo com o streamer offline (você
 pode resgatar pontos de uma live que já acabou). A doca **Kick** embaixo mostra cada live como um
