@@ -1,3 +1,2 @@
-- Onde caçar com o mesmo cálculo da extensão oficial do jogo: dados e fórmulas da versão do jogo no ar (baixados sozinhos quando o jogo atualiza), geometria das hunts medida enquanto você caça e risco ✓ / ⚠ / ☠ igual ao dela
-- Troca de mapa automática usa esse ranking (nunca vai para hunt ☠)
-- Kick: saiu o resgate automático (não funcionava); o K da barra de cima ficou verde
+- Cabeçalho diz se o XP/h é o real (medido agora) ou estimado (≈)
+- Mapa: o top 3 mostra o XP/h real da hunt atual ao lado da estimativa, a % de risco explicada ("golpe tira 19% do HP") e o bônus de XP real que o jogo está dando

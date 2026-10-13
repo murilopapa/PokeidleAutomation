@@ -238,11 +238,13 @@ function estadoPonto(i) {
   return 'fight';
 }
 function nomeHunt(i, slug) { return S[i].catalog?.hunts?.find((h) => h.slug === slug)?.nome || slug || ''; }
-function xphAgora(i) {
+// XP/h do pokémon na hunt atual: o REAL (XP que ele ganhou nos últimos minutos) quando já deu para
+// medir; senão a estimativa do Onde caçar.
+function xphReal(i) {
   const s = S[i], m = s.snap?.xpMedido;
-  if (m && m.slug === s.snap?.huntSlug && m.xpH != null) return m.xpH;
-  return s.rAtual?.xpH ?? null;
+  return m && m.slug === s.snap?.huntSlug && m.xpH != null ? m.xpH : null;
 }
+function xphAgora(i) { return xphReal(i) ?? S[i].rAtual?.xpH ?? null; }
 
 // ---- cabeçalho
 function headHTML(i) {
@@ -257,7 +259,9 @@ function headHTML(i) {
   let info = 'carregando o jogo…';
   if (snap?.ready && snap.connected) {
     const x = xphAgora(i);
-    info = snap.huntSlug ? `${esc(nomeHunt(i, snap.huntSlug))}${x != null ? ` · <b>${curto(x)}</b> XP/h` : ''}` : 'fora de hunt';
+    const real = xphReal(i) != null;
+    const tit = real ? 'XP/h REAL do pokémon: o XP que ele ganhou aqui nos últimos minutos' : 'Estimativa do Onde caçar (ainda medindo o real; leva uns 2 min caçando)';
+    info = snap.huntSlug ? `${esc(nomeHunt(i, snap.huntSlug))}${x != null ? ` · <span title="${tit}">${real ? '' : '≈'}<b>${curto(x)}</b> XP/h ${real ? 'real' : 'estimado'}</span>` : ''}` : 'fora de hunt';
   } else if (snap && snap.ready === false && snap.connected === false) info = 'entre na conta no jogo abaixo';
   return `
     <span class="dot ${estadoPonto(i)}"></span>
@@ -437,14 +441,15 @@ function mapaHTML(i, sw, fechar) {
     <div class="mon-h"><div class="ic">${retrato(pk.speciesId)}</div><div><b>${pk.shiny ? '✨ ' : ''}${esc(pk.nome)}</b><div class="hint" style="margin:0">Nv ${num(pk.level)} · treinador ${num(s.snap.level)}</div></div></div>
     <div class="kv"><span>IVs</span><b>${ivs}</b><span>Qualidade · Potência</span><b>${pk.quality != null ? n1(pk.quality) : '—'} · P${pk.potencia ?? 1}</b><span>Refino</span><b>${ref ? '+' + ref : '0'}</b>
       <span>TM elemental · AoE</span><b>${sim(pk.tmElemental)} · ${sim(pk.tmAoe)}</b><span>Poção automática</span><b>${s.res.comPocao ? 'sim' : 'não'}</b>
-      <span title="${esc((bx?.itens ?? []).map((x) => x.nome).join(' · ') || 'nenhum bônus ativo')}">Bônus XP</span><b>×${bx ? n1(bx.pokemon) : '1'}</b></div></div>`;
+      <span title="${esc((bx?.itens ?? []).map((x) => `${x.nome} ×${n1(x.mult)}`).join(' · ') || 'nenhum bônus ativo')}">Bônus XP</span><b>×${bx ? n1(bx.pokemon) : '1'}${s.snap.multXp ? ` <small title="Bônus que o jogo está dando de verdade (XP de cada abate ÷ XP base)">(real ×${n1(s.snap.multXp)})</small>` : ''}</b></div></div>`;
   const atual = s.snap.huntSlug;
-  const top = s.top.length ? s.top.map((r, k) => `<div class="t3 ${k ? '' : 'first'}"><span class="n">${k + 1}</span><div class="nm">${esc(r.hunt.nome)}<small>${num(r.killsH)} kills/h · ${r.killsPorVida >= 99 ? '99+' : n1(r.killsPorVida)} kills/vida</small></div><span class="xp">${curto(r.xpH)}/h</span><span class="tag ${r.risco.nivel === 'baixo' ? '' : 'seg'}" title="${r.risco.nivel === 'baixo' ? 'O pior golpe do selvagem tira essa % do seu HP' : 'O pior golpe tira metade ou mais do seu HP'}">${esc(r.risco.txt)}</span>${r.hunt.slug === atual ? '<span class="atual">atual</span>' : ''}</div>`).join('')
+  const realAqui = xphReal(i);
+  const top = s.top.length ? s.top.map((r, k) => `<div class="t3 ${k ? '' : 'first'}"><span class="n">${k + 1}</span><div class="nm">${esc(r.hunt.nome)}<small>${num(r.killsH)} abates/h${r.hunt.slug === atual && realAqui != null ? ` · real agora: <b>${curto(realAqui)}</b> XP/h` : ''}</small></div><span class="xp" title="XP/h estimado do pokémon (mesma conta da extensão oficial)">≈${curto(r.xpH)}/h</span><span class="tag ${r.risco.nivel === 'baixo' ? '' : 'seg'}" title="${r.risco.nivel === 'baixo' ? 'Risco baixo: o golpe mais forte dos selvagens daqui tira essa % do HP do seu pokémon' : 'Atenção: o golpe mais forte dos selvagens daqui tira metade ou mais do HP do seu pokémon'}">${esc(r.risco.txt.replace(/^([✓⚠]) (\d+%)$/, '$1 golpe tira $2 do HP'))}</span>${r.hunt.slug === atual ? '<span class="atual">atual</span>' : ''}</div>`).join('')
     : '<div class="vazio-top">Nenhuma hunt segura para ele agora.</div>';
   const alerta = s.alerta ? `<div class="res bad">${esc(s.alerta.motivo)}</div>` : '';
   const rod = `<div class="hint">Dados do jogo v${esc(s.res.versao)} · cálculo igual à extensão oficial · geometria medida em ${Object.keys(geoJunta()).length} hunts${s.res.aoe ? ` · TM AoE ${n1(s.res.aoe.alvosPorGolpe)} alvos/golpe${s.res.aoe.calibradoEm ? ` (calibrado em ${s.res.aoe.calibradoEm})` : ''}` : ''}</div>`;
   return cab + `<div class="map2">${pers}<div class="col"><h5>Top 3 mapas para ele</h5><div class="top3">${top}</div></div></div>${alerta}
-    ${rod}<div class="hint">Troca sempre para o 1º lugar sem ☠ (morte ou golpe que passa do HP), só fora de combate. O alerta vermelho aparece mesmo com a troca desligada.${!c.enabled ? ' A chave "Automação" desta conta está desligada.' : ''}</div>`;
+    ${rod}<div class="hint">≈ = estimativa (ondas cheias, igual à extensão oficial). "Real" = o XP que ele está ganhando agora, medido. A % é quanto do HP do seu pokémon o golpe mais forte dos selvagens dali tira. Troca sempre para o 1º lugar sem ☠ (morte ou golpe que passa do HP), só fora de combate. O alerta vermelho aparece mesmo com a troca desligada.${!c.enabled ? ' A chave "Automação" desta conta está desligada.' : ''}</div>`;
 }
 
 // ------------------------------------------------------------------ render
