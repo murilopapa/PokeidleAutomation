@@ -46,6 +46,7 @@
     if (d.type === 'hello') pushCfg();
     else if (d.type === 'state') { chrome.storage.local.set({ snapshot: d.state }); guardarMedida(d.state?.xpMedido); }
     else if (d.type === 'catalog') chrome.storage.local.set({ catalog: d.catalog });
+    else if (d.type === 'geo') chrome.storage.local.set({ geo: d.geo });
     else if (d.type === 'log') queueLog(d.entry);
   });
 
@@ -57,6 +58,8 @@
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.type === 'pie-resend') toPage('resend');
     if (msg && msg.type === 'pie-hunt' && typeof msg.slug === 'string') toPage('selectHunt', { slug: msg.slug });
+    // troca automática decidida fora da página (app): a página só obedece com as chaves ligadas
+    if (msg && msg.type === 'pie-hunt-auto' && typeof msg.slug === 'string') toPage('selectHunt', { slug: msg.slug, origem: 'auto' });
   });
 
   // Zera o resumo da sessão anterior ao abrir o jogo, para o painel não mostrar dado velho.

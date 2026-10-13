@@ -14,6 +14,8 @@ window.__PIE_PROTO = {
     welcome: 'welcome', // { estado (cheio), hunts, catalogoBolas, itensCompraveis, captura, chanceShiny, ... }
     estado: 'estado',   // { estado (delta) }
     batalha: 'batalha', // { ev: [{ k: 'ataque' | 'hunt' (trocaLivreEm) | ... }] }
+    campoInit: 'campo.init', // { slug, heroi: {c, r}, mobs: [...], centro, pvp, casa } — entrada num mapa
+    campo: 'campo',          // { heroi, mobs: [{ s slot, c, r, x morto }], fora: [slots] }
   },
 
   // Cliente -> servidor (mesmas mensagens que os botões da interface enviam)

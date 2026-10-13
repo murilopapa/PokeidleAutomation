@@ -35,8 +35,9 @@ O login fica guardado por quadrado.
   recarregar o jogo, zoom do jogo (−/+/auto; ou Ctrl + roda do mouse / Ctrl +, Ctrl −, Ctrl 0 dentro do jogo). Botão de expandir (ou duplo clique no cabeçalho; teclas 1–4; Esc volta).
 - **Barra de baixo:** Bola, Poção e Mapa. Clique para abrir a config por cima do jogo.
   - Bola / Poção: tipo, "comprar quando abaixo de" e lote por compra.
-  - Mapa: seu pokémon em campo e o top 3 de hunts (mesma conta do guia). Ligado, troca sempre
-    para o 1º lugar, risco alto (Segura ou Tranquila), só fora de combate.
+  - Mapa: seu pokémon em campo e o top 3 de hunts, com o mesmo cálculo da extensão oficial do jogo
+    ("/hunt for PokeIdle"). Ligado, troca para o 1º lugar que não seja ☠ (morte estimada ou golpe
+    que passa do HP), só fora de combate.
   - Chave **Automação**: nada age no jogo com ela desligada. Tudo começa desligado.
 
 Os menus abrem numa camada transparente por cima do quadrado: o jogo continua visível e rodando.
@@ -103,10 +104,10 @@ está **logado e assistindo**, e os pontos são de cada canal (só se gastam no 
 3. Ícone **K** no cabeçalho → **Farmar pontos**: abre um player da Kick sem som e na qualidade
    mínima em CADA live oficial (com pontos ativos) que estiver no ar, para farmar em todas ao mesmo
    tempo. Abre e fecha sozinho conforme as lives começam e acabam.
-4. **Resgatar sozinho** + o tipo de bônus: assim que algum canal tiver pontos para o resgate, o app
-   resgata (um por vez). Para resgatar na mão, abra a live grande e resgate na própria Kick.
+4. Para resgatar, abra a live grande (clique no nome dela na doca **Kick**) e resgate na própria Kick.
+   O resgate automático saiu: a Kick não aceita resgate feito de fora do site.
 
-**Kick na barra de cima (todas as contas):** Farmar, Resgatar e Player leve ligam ou desligam de
+**Kick na barra de cima (todas as contas):** Farmar e Player leve ligam ou desligam de
 uma vez em todas as contas logadas na Kick. Verde = ligado em todas, meio verde = só em algumas
 (o clique liga em todas). O painel K de cada conta continua para ajustar uma só.
 
@@ -128,6 +129,13 @@ Custo: um vídeo pequeno por live por conta com "Farmar pontos" ligado. Se a Kic
 o app guarda as últimas respostas em `%APPDATA%\PokeIdle Multi\kick-ultimas-respostas.json`
 (sem senha nem token) para diagnosticar.
 
+## Onde caçar (cálculo)
+
+Mesmo modelo da extensão oficial do jogo: fórmulas e catálogo vêm do próprio jogo (baixados quando
+ele muda de versão), a geometria de cada hunt é medida nas ondas cheias enquanto você caça (de
+todas as contas juntas; no Modo Eco o jogo não manda o campo, então não mede) e o resto usa as
+constantes medidas. Com a auto-poção do jogo ligada, só conta como morte o golpe que passa do HP.
+
 ## Atualizar a lógica
 
 O app usa o código da extensão (pasta dois níveis acima). Depois de mudar a extensão:
@@ -142,5 +150,9 @@ npm run sync
 - `preload-jogo.js`: gerado por `tools/sync.mjs` (inject.js + content scripts da extensão).
 - `lib/twitch.js`: login Device Code e chat por IRC WebSocket.
 - `lib/atualizar.js`: atualização automática pelo GitHub Releases.
-- `ui/`: interface. `vendor/`: cópia do cálculo e dos dados do guia.
+- `lib/jogo.js`: baixa da versão do jogo no ar os módulos `shared/` e os catálogos de espécies
+  (em `%APPDATA%\PokeIdle Multi\jogo\<versão>`), servidos à interface em `pie://app/jogo/`.
+- `ui/motor/motor.js`: o cálculo do Onde caçar, num Web Worker (modelo igual ao da extensão oficial,
+  conferido linha a linha). A geometria das ondas cheias é medida na página do jogo (`page/inject.js`).
+- `ui/`: interface. `vendor/`: formatação e regra da troca de mapa.
 - `test/`: jogo e Twitch falsos + teste ponta a ponta (`node test/run.mjs`; modos e atualização: `node test/modos.mjs`).

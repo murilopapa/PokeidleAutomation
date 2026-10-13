@@ -9,6 +9,8 @@
 // Saldo e resgate usam as mesmas rotas que o site da Kick usa, com o login da própria conta
 // (cookie "session_token" da sessão daquele quadrado). Nada de fingir espectador: quem assiste é o
 // player aberto pelo app.
+// Resgate automático desligado: o resgate pela API da Kick não funciona de fora do site.
+const AUTO_RESGATE = false;
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { session } = require('electron');
@@ -233,10 +235,11 @@ class Kick {
     }
   }
 
-  // Resgate automático: só com o jogo vinculado à MESMA conta da Kick, um por vez, no tipo escolhido.
+  // Resgate automático (desligado, ver AUTO_RESGATE): só com o jogo vinculado à MESMA conta da Kick, um por vez, no tipo escolhido.
   async talvezResgatar(i) {
     const c = this.contas[i], jg = this.jogo[i];
-    if (!c.auto || !jg?.vinculado) return;
+    // Desligado: o resgate pela API da Kick não funciona de fora do site. Resgate na própria live.
+    if (!AUTO_RESGATE || !c.auto || !jg?.vinculado) return;
     if (jg.login && this.user[i] && minus(jg.login) !== minus(this.user[i])) {
       this.erro[i] = `No jogo está vinculada a Kick "${jg.login}", aqui está logada "${this.user[i]}". Resgate automático parado.`;
       return;

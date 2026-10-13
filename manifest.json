@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PokeIdle Helper",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Onde caçar, compra automática e troca de hunt para o pokeidle.io. Funciona sozinha (Chrome, Edge, Brave, Opera). Tudo que age no jogo começa desligado.",
   "minimum_chrome_version": "116",
   "permissions": [

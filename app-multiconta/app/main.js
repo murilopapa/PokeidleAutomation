@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const Twitch = require('./lib/twitch');
 const Kick = require('./lib/kick');
+const { Jogo } = require('./lib/jogo');
+let jogo = null; // dados e fórmulas do jogo no ar (motor do Onde caçar)
 const Atualizador = require('./lib/atualizar');
 
 const SLOTS = 4;                                        // o jogo permite 4 contas por IP
@@ -365,9 +367,10 @@ ipcMain.handle('ui:estado', () => ({
   zoomKick: Number(appCfg.zoomKick) || 1,
   modo: appCfg.modo ? modo() : null,
   att: atualizador?.estado() ?? null,
-  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, desligada: !!s.desligada, nick: s.nick ?? null })),
+  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, geo: s.geo ?? null, desligada: !!s.desligada, nick: s.nick ?? null })),
   twitch: twitch.estado(),
   kick: kick.estado(),
+  jogo: jogo?.estado ?? null,
 }));
 ipcMain.handle('ui:dados', (_e, nome) => dados(nome));
 
@@ -380,6 +383,10 @@ ipcMain.on('ui:cfg', (_e, i, cfg) => {
 });
 ipcMain.on('ui:recarregar', (_e, i) => views[i]?.webContents.reloadIgnoringCache());
 ipcMain.on('ui:devtools', (_e, i) => views[i]?.webContents.openDevTools({ mode: 'detach' }));
+ipcMain.on('ui:hunt-auto', (_e, i, slug) => {
+  const v = views[i];
+  if (v && !v.webContents.isDestroyed() && typeof slug === 'string') v.webContents.send('jogo:runtime-msg', { type: 'pie-hunt-auto', slug });
+});
 
 // ------------------------------------------------------------------ ponte com o jogo (preload)
 ipcMain.on('jogo:store-all', (e) => {
@@ -393,7 +400,7 @@ ipcMain.on('jogo:store-set', (e, itens) => {
   if (itens.snapshot?.nick && itens.snapshot.nick !== store[i].nick) { store[i].nick = itens.snapshot.nick; salvar(i); }
   if (PERSISTE.some((k) => k in itens)) salvar(i);
   const paraUi = {};
-  for (const k of ['snapshot', 'catalog', 'medidas', 'cfg']) if (k in itens) paraUi[k] = itens[k];
+  for (const k of ['snapshot', 'catalog', 'medidas', 'cfg', 'geo']) if (k in itens) paraUi[k] = itens[k];
   if (Object.keys(paraUi).length) ui('slot:dados', i, paraUi);
   if (itens.snapshot) { twitch.snapshot(i, itens.snapshot); kick.snapshot(i, itens.snapshot); }
 });
@@ -451,6 +458,12 @@ app.whenReady().then(() => {
   protocol.handle('pie', (req) => {
     const u = new URL(req.url);
     const rel = path.normalize(decodeURIComponent(u.pathname)).replace(/^([/\\])+/, '');
+    if (u.host === 'app' && /^jogo[/\\]/.test(rel)) {
+      const arq = jogo?.arquivo(rel.slice(5));
+      if (!arq) return new Response('não', { status: 404 });
+      const tipo = /\.m?js$/.test(arq) ? 'text/javascript' : /\.json$/.test(arq) ? 'application/json' : 'application/octet-stream';
+      return new Response(fs.readFileSync(arq), { headers: { 'content-type': tipo + '; charset=utf-8' } });
+    }
     if (u.host !== 'app' || !/^(ui|vendor)[/\\]/.test(rel)) return new Response('não', { status: 404 });
     return net.fetch(pathToFileURL(path.join(__dirname, rel)).toString());
   });
@@ -461,6 +474,13 @@ app.whenReady().then(() => {
     aoMudar: (estado) => ui('tw:estado', estado),
     janela: (opts) => new BrowserWindow({ ...opts, parent: win ?? undefined, autoHideMenuBar: true }),
   });
+  jogo = new Jogo({
+    dir: path.join(app.getPath('userData'), 'jogo'),
+    gameUrl: GAME_URL,
+    fetch: (url) => net.fetch(url, { bypassCustomProtocolHandlers: true }),
+    aoMudar: (estado) => ui('jogo:estado', estado),
+  });
+  jogo.iniciar();
   kick = new Kick({
     arquivo: path.join(app.getPath('userData'), 'kick.json'),
     debug: path.join(app.getPath('userData'), 'kick-ultimas-respostas.json'),

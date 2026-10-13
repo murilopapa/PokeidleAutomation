@@ -17,7 +17,6 @@ const ICON = {
   car: '<svg class="car" viewBox="0 0 12 12"><path d="M2 8l4-4 4 4"/></svg>',
   power: '<svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.6a8 8 0 1 0 11.4 0"/></svg>',
 };
-const POC = { 0: 'sem poção', 200: 'Small', 201: 'Great', 202: 'Ultra', 203: 'Hyper', 204: 'Ultimate' };
 // Troca de mapa: sempre o 1º lugar, risco alto (aceita Segura e Tranquila), XP do pokémon.
 const AUTO_HUNT = { criterio: 'pk', riscoMax: 'alto', ganhoMin: 0 };
 const ID_BOLA = 'app-bola', ID_POCAO = 'app-pocao';
@@ -74,29 +73,114 @@ function estoque(i, kind, id) {
 }
 
 // ------------------------------------------------------------------ cálculo (Onde caçar)
+// Motor igual ao da extensão oficial do jogo, num Web Worker (ui/motor/motor.js) com os módulos e
+// catálogos da versão do jogo no ar (baixados pelo app). Ver lib/jogo.js.
+let JOGO = null;                 // { versao, pronto, erro } (processo principal)
+let MOTOR_V = null;              // versão carregada no worker
+let MOTOR_ERRO = null;
+const motor = new Worker('motor/motor.js');
+const pedidos = new Map();
+let pedidoId = 0;
+motor.onmessage = (ev) => {
+  const m = ev.data || {};
+  if (m.t === 'pronto') { MOTOR_V = m.versao; MOTOR_ERRO = null; for (let i = 0; i < N; i++) { if (S[i]) S[i].chave = ''; agendarCalculo(i); } }
+  else if (m.t === 'erro' && m.id == null) { MOTOR_ERRO = m.erro; for (let i = 0; i < N; i++) renderSlot(i); }
+  if (m.id != null && pedidos.has(m.id)) { const p = pedidos.get(m.id); pedidos.delete(m.id); m.t === 'erro' ? p.err(new Error(m.erro)) : p.ok(m.r); }
+};
+motor.onerror = (e) => { MOTOR_ERRO = e.message || 'falha no motor'; };
+function carregarMotor() {
+  if (JOGO?.pronto && JOGO.versao && JOGO.versao !== MOTOR_V) motor.postMessage({ t: 'carregar', versao: JOGO.versao });
+}
+const analisarNoMotor = (pk, ctx, op) => new Promise((ok, err) => { const id = ++pedidoId; pedidos.set(id, { ok, err }); motor.postMessage({ t: 'analisar', id, pk, ctx, op }); });
+
+// Geometria das ondas cheias: a de todas as contas junta (o mapa é o mesmo para todo mundo).
+function geoJunta() {
+  const out = {};
+  for (const s of S) for (const [slug, h] of Object.entries(s?.geo?.hunts ?? {})) {
+    if (h.amostras?.length) (out[slug] ??= []).push(...h.amostras.flat());
+  }
+  return out;
+}
+const chaveRitmo = (pk) => `${pk.id}${pk.tmAoe === true || pk.tmAoe === 'true' || pk.tmAoe === 1 ? ':aoe' : ''}`;
+function ritmoDe(s, pk) {
+  const out = {}, ch = chaveRitmo(pk);
+  for (const [slug, h] of Object.entries(s?.geo?.hunts ?? {})) {
+    const r = h.ritmo?.[ch];
+    if (r && r.seg >= 600) out[slug] = (r.abates * 3600) / r.seg;
+  }
+  return out;
+}
+// Risco como a extensão oficial: ☠ (1 golpe passa do HP ou ≥0,5 morte/h), ⚠ (pior golpe ≥ 50% do HP), ✓.
+function riscoDe(l) {
+  if (l.umHit) return { nivel: 'perigo', txt: '☠ 1 hit' };
+  if (l.mortesH >= 0.5) return { nivel: 'perigo', txt: `☠ ${n1(l.mortesH)}/h` };
+  const pct = Math.round(l.hitPct * 100);
+  return pct >= 50 ? { nivel: 'médio', txt: `⚠ ${pct}%` } : { nivel: 'baixo', txt: `✓ ${pct}%` };
+}
+
 async function calcular(i) {
   const s = S[i];
   const snap = s.snap, catalog = s.catalog;
   const pk = (snap?.team ?? []).find((p) => p.id === snap?.activeId);
   if (!pk || !catalog?.combate || !snap?.ready) { s.res = null; s.top = []; s.alerta = null; s.rAtual = null; s.pk = pk || null; return; }
+  if (!MOTOR_V) { s.pk = pk; return; }
   // Já calculando: refaz quando terminar (senão um catálogo/ficha que chegou no meio se perde).
   if (s.calc) { s.denovo = true; return; }
   s.calc = true;
+  s.pk = pk;
   try {
-    const chave = [PieHunt.chaveFicha(pk, snap, catalog), snap.level, catalog.at].join('|');
-    if (chave !== s.chave) { s.sim = await PieHunt.simular(pk, catalog, snap.level, snap); s.chave = chave; }
+    const geo = geoJunta(), ritmo = ritmoDe(s, pk);
+    const comPocao = !!snap.gameAuto?.autoPotion;
+    // Recalcula só quando muda o que entra na conta (como a oficial), não a cada golpe recebido.
+    const chave = JSON.stringify([MOTOR_V, pk.id, pk.level, pk.tmElemental, pk.tmAoe, pk.stats, pk.maxHp, snap.euXp, comPocao, catalog.at, Object.keys(geo).length, Object.keys(ritmo).length]);
+    if (chave !== s.chave || !s.bruto) {
+      const precoNosso = Object.fromEntries((catalog.itensNossos ?? []).filter((x) => x.name && x.npcPrice > 0).map((x) => [x.name, x.npcPrice]));
+      const c = catalog.combate;
+      const ctx = {
+        hunts: catalog.hunts ?? [],
+        consts: { tabelaTipos: c.tabelaTipos, ampliacaoHunt: c.ampliacaoHunt, multHpSelvagem: c.multHpSelvagem, multDanoSelvagem: c.multDanoSelvagem, tiposBoost: catalog.tiposBoost ?? [] },
+        eu: snap.euXp ?? { level: snap.level },
+        geo, ritmo, precoNosso,
+      };
+      s.bruto = await analisarNoMotor(pk, ctx, { comPocao, ordem: 'xp' });
+      s.chave = chave;
+    }
+    const r = s.bruto;
+    const lista = r.linhas.filter((l) => l.liberada && !l.inviavel).map((l) => ({
+      hunt: { slug: l.slug, nome: l.nome, nivel: l.nivel, area: l.regiao },
+      xpH: Math.round(l.xpPokemonH), xpTrH: Math.round(l.xpTreinadorH), ouroH: Math.round(l.ouroH),
+      killsH: Math.round(l.kph), killsPorVida: l.abatesPorVida, ttk: l.ttk, mortesH: l.mortesH,
+      risco: riscoDe(l), aoe: l.aoe, geoMedida: l.geoMedida, kphMedido: l.kphMedido, melhorGolpe: l.melhorGolpe,
+    }));
     s.pk = pk;
-    s.res = PieHunt.ajustar(s.sim, snap, catalog, { medidas: s.medidas, pk });
-    s.mult = PieHunt.multiplicadores(snap, catalog);
-    const lista = s.res?.lista ?? [];
-    s.top = lista.filter((r) => r.hunt?.slug && r.killsPorVida >= 5 && r.ttk <= 60).sort((a, b) => b.xpH - a.xpH).slice(0, 3);
-    s.rAtual = lista.find((r) => r.hunt?.slug === snap.huntSlug) || null;
+    s.res = { lista, total: r.linhas.length, bonusXp: r.bonusXp, aoe: r.aoe, comPocao: r.comPocao, versao: r.versao, ms: r.ms };
+    // Top 3: a ordem do motor (XP do pokémon), sem as perigosas (☠) e as que ele demora a matar.
+    s.top = lista.filter((l) => l.risco.nivel !== 'perigo' && l.killsPorVida >= 5 && l.ttk <= 60).slice(0, 3);
+    s.rAtual = lista.find((l) => l.hunt.slug === snap.huntSlug) || null;
     s.alerta = PieHunt.decidir(lista, snap.huntSlug, AUTO_HUNT);
-  } catch (e) { console.error(e); }
+    trocaAutomatica(i);
+  } catch (e) { console.error(e); s.res = { erro: 'Não consegui calcular: ' + e.message }; s.top = []; s.alerta = null; }
   finally {
     s.calc = false;
     if (s.denovo) { s.denovo = false; agendarCalculo(i); }
   }
+}
+
+// Troca de mapa automática (mesmas regras de antes): só com a chave da conta e a do Mapa ligadas,
+// nunca em casa/arena/místico nem na cidade com hunt escolhida, 1 min depois de uma troca e no
+// máximo um pedido a cada 15 s. O jogo espera sair de combate para trocar.
+const ESPERA_ENTRE_TROCAS = 60 * 1000;
+function trocaAutomatica(i) {
+  const s = S[i], snap = s.snap, c = cfgDe(i);
+  if (!c.enabled || !c.autoHunt?.enabled || !snap?.ready || !snap.connected) return;
+  if (snap.emCasa || snap.arena || snap.mistico) return;
+  if (snap.huntSlug && snap.noCentro) return;
+  const t = (s.troca ??= { ultima: 0, pedido: 0, slug: null });
+  if (t.slug && snap.huntSlug === t.slug) { t.ultima = Date.now(); t.slug = null; }
+  if (!s.alerta) return;
+  if (Date.now() - t.ultima < ESPERA_ENTRE_TROCAS || Date.now() - t.pedido < 15000) return;
+  t.pedido = Date.now(); t.slug = s.alerta.melhor.hunt.slug;
+  app.huntAuto(i, t.slug);
 }
 let calcTimer = {};
 function agendarCalculo(i) {
@@ -230,16 +314,13 @@ function kickHTML(i) {
   let h = `<h4>Kick · ${k.user ? 'logado como <b style="color:var(--fg)">' + esc(k.user) + '</b>' : 'não logado'}</h4>`;
   if (!k.user) h += '<div class="live"><span class="st">Kick não logada. Use a engrenagem.</span></div>';
   const swHtml = `<div class="kk-sw">${sw(`data-kkset="${i}|ligado"`, k.ligado, 'Farmar pontos (player mudo)')}
-    ${sw(`data-kkset="${i}|auto"`, k.auto, 'Resgatar sozinho')}
-    ${sw(`data-kkset="${i}|leve"`, !k.completo, 'Player leve (só vídeo, gasta menos RAM)')}
-    <label class="kk-tipo"><span>Bônus</span><select data-kktipo="${i}">${Object.entries(NOME_TIPO).map(([t, n]) => `<option value="${t}" ${k.tipo === t ? 'selected' : ''}>${n} · ${num(custoTipo(i, t))} pts</option>`).join('')}</select></label></div>`;
+    ${sw(`data-kkset="${i}|leve"`, !k.completo, 'Player leve (só vídeo, gasta menos RAM)')}</div>`;
   if (!jg) return h + swHtml + '<div class="live"><span class="st">Esperando o jogo mandar os canais da Kick…</span></div>';
   if (!jg.vinculado) h += '<div class="aviso">Esta conta do jogo ainda não tem Kick vinculada (no jogo: Bônus na Kick → Vincular). Sem isso o resgate não vira bônus.</div>';
   else if (jg.login && k.user && jg.login.toLowerCase() !== k.user.toLowerCase()) h += `<div class="aviso">No jogo está vinculada <b>${esc(jg.login)}</b>, aqui está logada <b>${esc(k.user)}</b>. O resgate só vale na mesma conta.</div>`;
   h += swHtml;
   const ativos = Object.entries(jg.bonus || {}).filter(([, ate]) => ate > Date.now());
   if (ativos.length) h += `<div class="kk-ativos">${ativos.map(([t, ate]) => `<span>⚡ ${NOME_TIPO[t] || t} +${n1(jg.pct)}% · ${tempoRestante(ate - Date.now())}</span>`).join('')}</div>`;
-  const custo = custoTipo(i, k.tipo);
   const canais = (jg.oficiais || []).filter((c) => c.ativo).sort((a, b) => Number(b.aoVivo) - Number(a.aoVivo) || (k.saldos?.[b.slug]?.pontos || 0) - (k.saldos?.[a.slug]?.pontos || 0));
   h += canais.map((c) => {
     const s = k.saldos?.[c.slug];
@@ -247,7 +328,7 @@ function kickHTML(i) {
       <span class="st">${s ? num(s.pontos) + ' pts' : '—'}</span></div>`;
   }).join('') || '<div class="live"><span class="st">Nenhum canal oficial com pontos ativos.</span></div>';
   if (k.erro) h += `<div class="erro">${esc(k.erro)}</div>`;
-  if (k.historico?.length) h += `<div class="hint" style="margin:6px 4px 0">Últimos resgates: ${k.historico.slice().reverse().map((r) => `${NOME_TIPO[r.tipo] || r.tipo} em ${esc(r.slug)} (${r.origem})`).join(' · ')}</div>`;
+  h += '<div class="hint" style="margin:6px 4px 0">Para resgatar, abra a live grande (clique no nome dela na doca Kick) e resgate na própria Kick.</div>';
   return h;
 }
 // Minimizada, a doca vira uma faixa fina: os players ficam minúsculos, mas continuam na tela
@@ -260,7 +341,7 @@ function renderKickDock() {
   d.classList.toggle('on', contas.length > 0);
   d.classList.toggle('min', kdockMin);
   const html = contas.map((i) => {
-    const k = KK.contas[i], jg = S[i].snap?.kick, custo = custoTipo(i, k.tipo);
+    const k = KK.contas[i], jg = S[i].snap?.kick;
     const vendo = k.assistindo || [];
     const total = Object.values(k.saldos || {}).reduce((a, x) => a + (x.pontos || 0), 0);
     const nomeCanal = (slug) => esc((jg?.oficiais || []).find((c) => c.slug === slug)?.nome || slug);
@@ -270,7 +351,7 @@ function renderKickDock() {
       ? vendo.map((slug) => `<div class="kcol"><span class="kchip-w ${kkVer?.i === i && kkVer.slug === slug ? 'aberta' : ''}"><button class="kchip" data-kkver="${i}|${esc(slug)}" title="Abrir esta live grande (é o mesmo player: qualidade, som e resgates que você mexer continuam)">${nomeCanal(slug)} <b>${k.saldos?.[slug] ? num(k.saldos[slug].pontos) : '—'}</b></button><button class="ksom ${KKSOM[i + '|' + slug] ? 'on' : ''}" data-kksom="${i}|${esc(slug)}" title="${KKSOM[i + '|' + slug] ? 'Tirar o som' : 'Ligar o som'}">${KKSOM[i + '|' + slug] ? '🔊' : '🔇'}</button></span>${k.visivel ? `<div class="kmini" data-kmini="${i}" data-kcanal="${esc(slug)}"></div>` : ''}</div>`).join('')
       : '<span class="kd-vazio">nenhuma live oficial com pontos no ar</span>';
     return `<div class="kd" data-kkwrap="${i}"><div class="kd-t" data-kkbtn="${i}" title="Abrir Kick desta conta"><b>${nomeConta(i)}</b>
-      <span class="kd-p">${num(total)} pts</span><span class="kd-s">${vendo.length} ${vendo.length === 1 ? 'live' : 'lives'} · ${k.auto ? 'resgate auto' : 'resgate manual'}</span>${k.erro ? '<span class="kd-e">⚠ ver Kick</span>' : ''}</div>
+      <span class="kd-p">${num(total)} pts</span><span class="kd-s">${vendo.length} ${vendo.length === 1 ? 'live' : 'lives'}</span>${k.erro ? '<span class="kd-e">⚠ ver Kick</span>' : ''}</div>
       <div class="kchips">${chips}</div>
       <button class="kd-vis ${k.visivel ? 'on' : ''}" data-kkvis="${i}" title="${k.visivel ? 'Esconder os players (continuam rodando)' : 'Mostrar os players pequenos'}">${k.visivel ? '◉' : '○'}</button></div>`;
   }).join('');
@@ -339,24 +420,31 @@ function retrato(pokeId) {
 }
 
 function mapaHTML(i, sw, fechar) {
-  const s = S[i], c = cfgDe(i), pk = s.pk, f = s.res?.ficha;
+  const s = S[i], c = cfgDe(i), pk = s.pk;
   const cab = `<div class="ph2"><span>Trocar de mapa sozinho</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-mapa="${i}"`, c.autoHunt?.enabled)}${fechar}</span></div>`;
-  if (!pk || !s.res) return cab + `<div class="vazio-top">${s.snap?.ready ? 'Calculando…' : 'Abra o jogo desta conta para calcular.'}</div>`;
+  if (!pk || !s.res) {
+    const msg = !s.snap?.ready ? 'Abra o jogo desta conta para calcular.'
+      : MOTOR_ERRO ? 'Não consegui carregar os dados do jogo: ' + MOTOR_ERRO
+      : !MOTOR_V ? (JOGO?.erro && !JOGO?.pronto ? 'Não consegui baixar os dados do jogo: ' + JOGO.erro : 'Baixando os dados do jogo…') : 'Calculando…';
+    return cab + `<div class="vazio-top">${esc(msg)}</div>`;
+  }
   if (s.res.erro) return cab + `<div class="vazio-top">${esc(s.res.erro)}</div>`;
-  const ivs = f?.ivs ? ['hp', 'atk', 'def', 'spAtk', 'spDef', 'speed'].map((k) => f.ivs[k]).join('/') : '—';
-  const ref = f?.refino ? Object.values(f.refino).reduce((a, b) => a + b, 0) : 0;
-  const mult = s.mult;
+  const ivs = pk.ivs ? ['hp', 'atk', 'def', 'spAtk', 'spDef', 'speed'].map((k) => pk.ivs[k]).join('/') : '—';
+  const ref = pk.refino ? Object.values(pk.refino).reduce((a, b) => a + (Number(b) || 0), 0) : 0;
+  const bx = s.res.bonusXp;
+  const sim = (v) => (v === true || v === 'true' || v === 1 || (typeof v === 'string' && v && v !== 'false') ? 'sim' : 'não');
   const pers = `<div class="col"><h5>Meu personagem</h5>
     <div class="mon-h"><div class="ic">${retrato(pk.speciesId)}</div><div><b>${pk.shiny ? '✨ ' : ''}${esc(pk.nome)}</b><div class="hint" style="margin:0">Nv ${num(pk.level)} · treinador ${num(s.snap.level)}</div></div></div>
-    <div class="kv"><span>IVs</span><b>${ivs}</b><span>Qualidade · Potência</span><b>${n1(f.q)} · P${f.pot}</b><span>Refino</span><b>${ref ? '+' + ref : '0'}</b>
-      <span>TM elemental · AoE</span><b>${f.tm ? 'sim' : 'não'} · ${f.aoe ? 'sim' : 'não'}</b><span>Poção</span><b>${POC[f.pocao] ?? f.pocaoExtra?.nome ?? f.pocao}</b>
-      <span>Bônus XP</span><b>×${mult ? n1(mult.calcPk) : '1'}</b></div></div>`;
+    <div class="kv"><span>IVs</span><b>${ivs}</b><span>Qualidade · Potência</span><b>${pk.quality != null ? n1(pk.quality) : '—'} · P${pk.potencia ?? 1}</b><span>Refino</span><b>${ref ? '+' + ref : '0'}</b>
+      <span>TM elemental · AoE</span><b>${sim(pk.tmElemental)} · ${sim(pk.tmAoe)}</b><span>Poção automática</span><b>${s.res.comPocao ? 'sim' : 'não'}</b>
+      <span title="${esc((bx?.itens ?? []).map((x) => x.nome).join(' · ') || 'nenhum bônus ativo')}">Bônus XP</span><b>×${bx ? n1(bx.pokemon) : '1'}</b></div></div>`;
   const atual = s.snap.huntSlug;
-  const top = s.top.length ? s.top.map((r, k) => `<div class="t3 ${k ? '' : 'first'}"><span class="n">${k + 1}</span><div class="nm">${esc(r.hunt.nome)}<small>${num(r.killsH)} kills/h · ${r.killsPorVida >= 99 ? '99+' : n1(r.killsPorVida)} kills/vida</small></div><span class="xp">${curto(r.xpH)}/h</span><span class="tag ${r.risco.txt === 'Tranquila' ? '' : 'seg'}">${r.risco.txt}</span>${r.hunt.slug === atual ? '<span class="atual">atual</span>' : ''}</div>`).join('')
+  const top = s.top.length ? s.top.map((r, k) => `<div class="t3 ${k ? '' : 'first'}"><span class="n">${k + 1}</span><div class="nm">${esc(r.hunt.nome)}<small>${num(r.killsH)} kills/h · ${r.killsPorVida >= 99 ? '99+' : n1(r.killsPorVida)} kills/vida</small></div><span class="xp">${curto(r.xpH)}/h</span><span class="tag ${r.risco.nivel === 'baixo' ? '' : 'seg'}" title="${r.risco.nivel === 'baixo' ? 'O pior golpe do selvagem tira essa % do seu HP' : 'O pior golpe tira metade ou mais do seu HP'}">${esc(r.risco.txt)}</span>${r.hunt.slug === atual ? '<span class="atual">atual</span>' : ''}</div>`).join('')
     : '<div class="vazio-top">Nenhuma hunt segura para ele agora.</div>';
   const alerta = s.alerta ? `<div class="res bad">${esc(s.alerta.motivo)}</div>` : '';
+  const rod = `<div class="hint">Dados do jogo v${esc(s.res.versao)} · cálculo igual à extensão oficial · geometria medida em ${Object.keys(geoJunta()).length} hunts${s.res.aoe ? ` · TM AoE ${n1(s.res.aoe.alvosPorGolpe)} alvos/golpe${s.res.aoe.calibradoEm ? ` (calibrado em ${s.res.aoe.calibradoEm})` : ''}` : ''}</div>`;
   return cab + `<div class="map2">${pers}<div class="col"><h5>Top 3 mapas para ele</h5><div class="top3">${top}</div></div></div>${alerta}
-    <div class="hint">Risco alto (aceita Segura e Tranquila). Troca sempre para o 1º lugar, só fora de combate. O alerta vermelho aparece mesmo com a troca desligada.${!c.enabled ? ' A chave "Automação" desta conta está desligada.' : ''}</div>`;
+    ${rod}<div class="hint">Troca sempre para o 1º lugar sem ☠ (morte ou golpe que passa do HP), só fora de combate. O alerta vermelho aparece mesmo com a troca desligada.${!c.enabled ? ' A chave "Automação" desta conta está desligada.' : ''}</div>`;
 }
 
 // ------------------------------------------------------------------ render
@@ -558,7 +646,7 @@ function renderKkVer() {
   if (!kkVer) { p.innerHTML = ''; delete p.dataset.h; return; }
   const { i, slug } = kkVer, k = KK.contas[i] || {}, jg = S[i].snap?.kick;
   const canal = (jg?.oficiais || []).find((c) => c.slug === slug);
-  const s = k.saldos?.[slug], custo = custoTipo(i, k.tipo), somOn = !!KKSOM[i + '|' + slug];
+  const s = k.saldos?.[slug], somOn = !!KKSOM[i + '|' + slug];
   const html = `<div class="kk-barra"><b>${esc(canal?.nome || slug)}</b><span>na conta ${nomeConta(i)}</span><span class="kd-p">${s ? num(s.pontos) : '—'} pts</span>
     <span class="sp"></span><span class="hint" style="margin:0">Mesmo player da doca: o que você mudar aqui continua.</span>
     <span class="kk-zoom"><button data-kkzoom="-1" title="Diminuir (Ctrl −)">−</button><b>${Math.round(ZOOMKK * 100)}%</b><button data-kkzoom="1" title="Aumentar (Ctrl +)">+</button></span>
@@ -624,7 +712,6 @@ function renderAtt() {
 // Cada conta continua com o seu painel K; aqui é só o atalho. Cinza = nenhuma, meio = algumas.
 const KKG = [
   { campo: 'ligado', nome: 'Farmar', de: (k) => !!k.ligado, tit: 'Farmar pontos (player mudo) em todas as contas logadas na Kick' },
-  { campo: 'auto', nome: 'Resgatar', de: (k) => !!k.auto, tit: 'Resgatar sozinho em todas as contas logadas na Kick' },
   { campo: 'leve', nome: 'Player leve', de: (k) => !k.completo, tit: 'Player leve (só vídeo, menos RAM) em todas. Desligado = página completa da Kick' },
 ];
 const contasKick = () => Array.from({ length: N }, (_, i) => i).filter((i) => KK.contas[i]?.user && !S[i]?.desligada);
@@ -896,11 +983,13 @@ app.onDados((i, d) => {
   if ('catalog' in d) { s.catalog = d.catalog; s.chave = ''; }
   if ('medidas' in d) s.medidas = d.medidas || {};
   if ('cfg' in d && d.cfg) s.cfg = d.cfg;
+  if ('geo' in d) s.geo = d.geo || null;
   agendarCalculo(i);
   renderSlot(i);
   if (MODO === 'ultra') renderUltra();
 });
 app.onModo((m) => { MODO = m; renderModos(); });
+app.onJogo((e) => { JOGO = e; carregarMotor(); for (let i = 0; i < N; i++) renderSlot(i); });
 app.att.onEstado((e) => { const antes = ATT?.fase; ATT = e; renderAtt(); if (e.fase === 'pronto' && antes !== 'pronto') toast(`Versão ${e.nova} pronta: clique em "Atualizar para ${e.nova}" lá em cima`); });
 app.onZoom((i, z) => { if (!S[i]) return; S[i].zoom = z; if (menu === i) renderSlot(i); });
 const fmtMb = (mb) => (mb >= 1024 ? n1(mb / 1024) + ' GB' : Math.round(mb) + ' MB');
@@ -934,8 +1023,11 @@ app.kick.onAudio((m) => { KKSOM = m || {}; renderKickDock(); renderKkVer(); });
   ATT = est.att || null;
   renderAtt();
   // o que já chegou ao vivo (antes desta resposta) vale mais que o guardado
-  for (let i = 0; i < N; i++) S[i] = Object.assign({ snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
+  for (let i = 0; i < N; i++) S[i] = Object.assign({ snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, geo: est.stores[i].geo || null, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
   montar();
   renderTudo();
-  PieHunt.carregar().then(() => { for (let i = 0; i < N; i++) agendarCalculo(i); });
+  JOGO = est.jogo || null;
+  carregarMotor();
+  for (let i = 0; i < N; i++) agendarCalculo(i);
+  PieHunt.carregar().then(() => renderTudo()).catch(() => {}); // só para os retratos
 })();

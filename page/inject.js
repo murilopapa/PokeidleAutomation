@@ -109,9 +109,12 @@
           multDanoSelvagem: m.multDanoSelvagem ?? 1.8,
         },
         tiposBoost: m.tiposBoost ?? [],
+        // itens próprios do jogo (nome e preço de NPC): entram no preço do loot, como na extensão oficial
+        itensNossos: (m.itensNossos ?? []).map((i) => ({ id: i.id, name: i.name, npcPrice: i.npcPrice ?? null })),
         items: S.items,
       };
       resetUsage();
+      geoWelcome(m);
       conferirMesclador();
       post('catalog', { catalog: S.catalog });
       trackUsage();
@@ -120,6 +123,10 @@
       S.eu = S.mesclar(m.estado);
       trackUsage();
       publish();
+    } else if (m.t === P.in.campoInit) {
+      geoCampoInit(m);
+    } else if (m.t === P.in.campo) {
+      geoCampo(m);
     } else if (m.t === P.in.batalha && Array.isArray(m.ev)) {
       for (const ev of m.ev) {
         if (ev.k === 'ataque') S.ultimoCombate = Date.now();
@@ -130,6 +137,104 @@
     if (m.estado?.servidorAgora) S.desvio = Date.now() - m.estado.servidorAgora;
     if (document.hidden) { processarTroca(); talvezAvaliar(); }
   }
+
+
+  // ------------------------------------------------------------ geometria das hunts (igual à extensão oficial)
+  // No instante em que uma ONDA CHEIA nasce (≥ 80% dos pontos de spawn da hunt juntos), guarda a
+  // distância (tiles) do seu pokémon até cada selvagem novo: é a "fila de chegada" que o motor usa.
+  // E o ritmo real (abates/h por pokémon, só referência). Mesma chave de armazenamento da oficial.
+  const GEO_CHAVE = 'pokeidle-hunt:geo:v3';
+  const GEO_MAX_AMOSTRAS = 6, GEO_JANELA_MS = 4000, GEO_FRACAO_CHEIA = 0.8, GEO_MIN_ONDA = 6, GEO_MAX_SPAWNS = 16;
+  let geoBanco = (() => { try { return JSON.parse(localStorage.getItem(GEO_CHAVE)) || { hunts: {} }; } catch (_) { return { hunts: {} }; } })();
+  if (!geoBanco.hunts) geoBanco = { hunts: {} };
+  let geoTimer = null;
+  function geoGravar() {
+    clearTimeout(geoTimer);
+    geoTimer = setTimeout(() => {
+      try { localStorage.setItem(GEO_CHAVE, JSON.stringify(geoBanco)); } catch (_) { /* cota cheia */ }
+      post('geo', { geo: geoBanco });
+    }, 2000);
+  }
+  const geoPontos = new Map();
+  function geoWelcome(m) {
+    for (const h of m?.hunts ?? []) {
+      const total = (h.especies ?? []).reduce((a, x) => a + (Number(x.pontos) || 0), 0);
+      if (h.slug && total) geoPontos.set(h.slug, Math.min(GEO_MAX_SPAWNS, Math.round(total)));
+    }
+    post('geo', { geo: geoBanco });
+  }
+  const geoOndaCheia = (slug) => Math.max(GEO_MIN_ONDA, Math.ceil(GEO_FRACAO_CHEIA * (geoPontos.get(slug) ?? 15)));
+  const geoNaoSelvagem = (x) => x.bn || x.ti !== undefined || x.cura || x.tm || x.depot || x.tr;
+  const geoChavePk = (pk) => {
+    if (!pk?.id) return null;
+    const aoe = pk.tmAoe ?? pk.tm_aoe;
+    return `${pk.id}${aoe === true || aoe === 'true' || aoe === 1 ? ':aoe' : ''}`;
+  };
+  let geoSessao = null;
+  let geoPkAtivo = null;
+  function geoFecharSessao() {
+    const s = geoSessao;
+    if (!s) return;
+    clearTimeout(s.onda?.timer);
+    const seg = (Date.now() - s.inicio) / 1000;
+    if (seg >= 60 && s.abates > 0) {
+      const h = (geoBanco.hunts[s.slug] ??= {});
+      const r = ((h.ritmo ??= {})[s.pkId ?? '?'] ??= { abates: 0, seg: 0 });
+      r.abates += s.abates; r.seg += seg;
+      geoGravar();
+    }
+    geoSessao = null;
+  }
+  function geoFecharOnda(s) {
+    const onda = s.onda;
+    s.onda = null;
+    if (!onda || onda.dists.length < geoOndaCheia(s.slug)) return;
+    const h = (geoBanco.hunts[s.slug] ??= {});
+    h.amostras = [...(h.amostras ?? []), onda.dists.sort((a, b) => a - b)].slice(-GEO_MAX_AMOSTRAS);
+    h.medidoEm = Date.now();
+    geoGravar();
+  }
+  function geoNasceu(s, x) {
+    if (!s.heroi || x.c == null || x.r == null) return;
+    if (!s.onda) {
+      const onda = { dists: [] };
+      onda.timer = setTimeout(() => { if (s.onda === onda) geoFecharOnda(s); }, GEO_JANELA_MS);
+      s.onda = onda;
+    }
+    s.onda.dists.push(Math.round(Math.hypot(x.c - s.heroi.c, x.r - s.heroi.r) * 10) / 10);
+  }
+  function geoConferirPk() {
+    const chave = geoChavePk((S.eu?.pokemons ?? []).find((p) => p.id === S.eu?.activeId));
+    if (chave !== geoPkAtivo) { geoFecharSessao(); geoPkAtivo = chave; }
+  }
+  function geoCampoInit(m) {
+    geoConferirPk();
+    geoFecharSessao();
+    if (!m?.slug || m.centro || m.pvp || m.casa != null) return;
+    geoSessao = { slug: m.slug, pkId: geoPkAtivo, inicio: Date.now(), abates: 0, slots: new Map(), heroi: null, onda: null };
+    if (m.heroi?.c != null) geoSessao.heroi = { c: m.heroi.c, r: m.heroi.r };
+    for (const x of m.mobs ?? []) if (!geoNaoSelvagem(x)) geoSessao.slots.set(x.s, !x.x);
+  }
+  function geoCampo(m) {
+    geoConferirPk();
+    const s = geoSessao;
+    if (!s) return;
+    if (m.heroi?.c != null) s.heroi = { c: m.heroi.c, r: m.heroi.r };
+    for (const x of m.mobs ?? []) {
+      if (geoNaoSelvagem(x)) continue;
+      const conhecido = s.slots.has(x.s);
+      const vivoAntes = s.slots.get(x.s);
+      if (x.x) {
+        if (vivoAntes) s.abates++;
+        s.slots.set(x.s, false);
+      } else if (!conhecido || (vivoAntes === false && x.x === false)) {
+        s.slots.set(x.s, true);
+        geoNasceu(s, x);
+      }
+    }
+    for (const slot of m.fora ?? []) s.slots.delete(slot);
+  }
+  addEventListener('pagehide', geoFecharSessao);
 
   // ------------------------------------------------------------ trava de combate (troca de hunt)
   // O jogo só deixa trocar de área com 3 s sem trocar dano — é quando o botão "Ir para o Centro
@@ -403,6 +508,16 @@
         bicicleta: e.bicicleta?.equipadaRar ?? null,
       },
       regras: estadoRegras(),
+      // Campos que o motor do jogo lê para os bônus de XP (hunt-analyser.mjs e a extensão oficial).
+      euXp: {
+        level: e.level ?? null,
+        loja: { vipAte: e.loja?.vipAte ?? 0, boosts: e.loja?.boosts ?? {}, atrasados: e.loja?.atrasados ?? null },
+        guildBonusPct: e.guildBonusPct ?? 0,
+        guild: { boostAte: e.guild?.boostAte ?? 0 },
+        twitch: e.twitch ? { assistindo: !!e.twitch.assistindo, pctAtual: Number(e.twitch.pctAtual) || 0 } : null,
+        kick: e.kick ? { pct: Number(e.kick.pct) || 0, bonus: e.kick.bonus ?? {} } : null,
+        evento: e.evento ?? null,
+      },
       // Bloco Kick do jogo (canais oficiais, recompensas e horas de bônus). Usado pelo app multi-conta.
       kick: e.kick ? {
         vinculado: !!(e.kick.vinculado ?? e.kick.login),
@@ -560,6 +675,7 @@
     }
     if (e.data.type === 'resend') {
       if (S.catalog) post('catalog', { catalog: S.catalog });
+      post('geo', { geo: geoBanco });
       publish(true);
     }
   });

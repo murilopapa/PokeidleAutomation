@@ -32,7 +32,7 @@ function estadoCheio(n) {
   return {
     cheio: true, nick: ['murilo', 'segunda', 'terceira', 'quarta'][n % 4], level: [87, 120, 60, 40][n % 4], gold: 500000, xp: 50000,
     loja: { vipAte: 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 0,
-    huntSlug: n % 4 === 3 ? null : 'kadabra', noCentro: n % 4 === 3, activeId: 11,
+    huntSlug: n % 4 === 3 ? null : n % 4 === 1 ? 'tangela' : 'kadabra', noCentro: n % 4 === 3, activeId: 11,
     balls: { 1: 48, 2: 5 }, items: { 200: 30, 201: 4 },
     automation: { autoPotion: true, autoBall: true, ballIds: [1], potionIds: n % 4 === 1 ? [201, 90001] : [201] },
     twitch: {
@@ -47,8 +47,9 @@ function estadoCheio(n) {
       bonus: {},
     },
     pokemons: [
-      { id: 11, nome: 'Yanma', speciesId: 193, level: 56 + n * 10, hp: 900, maxHp: 972, slot: 0, potencia: 1, quality: 1.717, ivs: { hp: 11, atk: 24, def: 25, spAtk: 32, spDef: 8, speed: 16 } },
-      { id: 12, nome: 'Pikachu', speciesId: 25, level: 40, hp: 30, maxHp: 140, slot: 1, potencia: 1, quality: 0.95, ivs: { hp: 5, atk: 8, def: 9, spAtk: 12, spDef: 4, speed: 30 } },
+      { id: 11, nome: 'Yanma', speciesId: 193, level: 56 + n * 10, hp: 900, maxHp: 972, slot: 0, potencia: 1, quality: 1.717, ivs: { hp: 11, atk: 24, def: 25, spAtk: 32, spDef: 8, speed: 16 }, tipos: ['BUG', 'FLYING'],
+        stats: { hp: 81 + n * 12, atk: 120 + n * 20, def: 70 + n * 10, spAtk: 140 + n * 25, spDef: 60 + n * 8, speed: 130 + n * 15 } },
+      { id: 12, nome: 'Pikachu', speciesId: 25, level: 40, hp: 30, maxHp: 140, slot: 1, potencia: 1, quality: 0.95, ivs: { hp: 5, atk: 8, def: 9, spAtk: 12, spDef: 4, speed: 30 }, stats: { hp: 12, atk: 30, def: 20, spAtk: 30, spDef: 25, speed: 50 } },
     ],
   };
 }
@@ -67,6 +68,12 @@ const srv = http.createServer((req, res) => {
   }
   if (u.pathname === '/shared/estado-delta.mjs') return send(fs.readFileSync(SRC + '/estado-delta.mjs'), 'text/javascript');
   if (u.pathname === '/assets/items.json') return send(fs.readFileSync(SRC + '/items.json'), 'application/json');
+  // módulos e catálogos do jogo (o app baixa para o motor do Onde caçar)
+  if (/^\/(shared\/[\w.-]+\.mjs|hunt-analyser\.mjs|assets\/creatures[\w-]*\.json)$/.test(u.pathname)) {
+    const arq = SRC + u.pathname;
+    if (fs.existsSync(arq)) return send(fs.readFileSync(arq), u.pathname.endsWith('.json') ? 'application/json' : 'text/javascript');
+    res.writeHead(404); return res.end();
+  }
   // Twitch falsa
   if (u.pathname === '/tw/device') return send(JSON.stringify({ device_code: 'dev123', user_code: 'ABCD-EFGH', verification_uri: `http://127.0.0.1:${PORT}/tw/activate`, interval: 1, expires_in: 600 }), 'application/json');
   if (u.pathname === '/tw/activate') return send('<h1 style="font-family:sans-serif">Twitch falsa: autorizado</h1>', 'text/html');
@@ -122,6 +129,13 @@ wssJogo.on('connection', (ws) => {
     itensNossos: [{ id: 90001, name: 'Golden Potion', category: 'heal', npcPrice: 5000, healPct: 1 }],
     itensCompraveis: [{ itemId: 200, preco: 50 }, { itemId: 201, preco: 150 }, { itemId: 90001, preco: 4000 }],
   }));
+  // uma onda cheia na hunt (para a geometria medida): 15 selvagens nascendo juntos
+  if (e.huntSlug && !e.noCentro) {
+    setTimeout(() => {
+      ws.send(JSON.stringify({ t: 'campo.init', slug: e.huntSlug, heroi: { c: 10, r: 10 }, mobs: [] }));
+      ws.send(JSON.stringify({ t: 'campo', heroi: { c: 10, r: 10 }, mobs: Array.from({ length: 15 }, (_, k) => ({ s: k, c: 10 + 3 + k, r: 10 + (k % 4), x: false })) }));
+    }, 1500);
+  }
   ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     log.push({ conta: n, ...m });

@@ -38,7 +38,7 @@ check('4 jogos carregados', views.filter((v) => v.url.includes('8787/app')).leng
 const nomes = await ui.$$eval('.slot .nome', (e) => e.map((x) => x.textContent));
 check('cada quadrado mostra a sua conta', ['murilo', 'segunda', 'terceira', 'quarta'].every((n) => nomes.some((x) => x.includes(n))), nomes.join(' | '));
 const info = await ui.$$eval('.slot .hunt-i', (e) => e.map((x) => x.textContent));
-check('hunt e XP/h no cabeçalho', info.filter((t) => /Kadabra/.test(t)).length === 3 && info.some((t) => /fora de hunt/.test(t)) && info.filter((t) => /XP\/h/.test(t)).length >= 2, info.join(' | '));
+check('hunt e XP/h no cabeçalho', info.filter((t) => /Kadabra|Tangela/.test(t)).length === 3 && info.some((t) => /fora de hunt/.test(t)) && info.filter((t) => /XP\/h/.test(t)).length >= 2, info.join(' | '));
 
 // sessões separadas: cookies de uma conta não aparecem na outra
 const sep = await eapp.evaluate(async ({ session }) => {
@@ -121,7 +121,8 @@ await sleep(500);
 // troca de mapa automática na conta com alerta
 const alertas = await ui.$$eval('.slot.alert', (e) => e.filter((x) => !/quarta/.test(x.textContent)).map((x) => +x.dataset.slot));
 const iAl = alertas.find((x) => x !== 0) ?? alertas[0];
-console.log('alerta em', alertas, iAl);
+const alvoTroca = await ui.evaluate((i) => S[i]?.alerta?.melhor?.hunt?.nome, iAl);
+console.log('alerta em', alertas, iAl, alvoTroca);
 if (!(await ui.isChecked(`[data-master="${iAl}"]`))) await ui.click(`.slot[data-slot="${iAl}"] .bar label.sw`);
 await ui.click(`.slot[data-slot="${iAl}"] [data-am="${iAl}|mapa"]`);
 await sleep(600);
@@ -132,7 +133,7 @@ await sleep(12000);
 const trocas = mockOut.split('\n').filter((l) => l.includes('hunt.select'));
 check('troca de mapa automática foi para o 1º lugar (só nessa conta)', trocas.length === 1, trocas.join(' / '));
 const head = await ui.textContent(`.slot[data-slot="${iAl}"] .hunt-i`);
-check('cabeçalho mostra a hunt nova', !/Kadabra/.test(head), head);
+check('cabeçalho mostra a hunt nova (1º lugar do motor)', !!alvoTroca && head.includes(alvoTroca), head + ' / esperado ' + alvoTroca);
 const ram = await ui.getAttribute('.chip', 'title');
 check('RAM com divisão por conta', /Placa de vídeo/.test(ram || ''), (ram || '').replace(/\n/g, ' | '));
 await shot('depois-troca.png');
@@ -243,16 +244,14 @@ await ui.click(`[data-kkvis="${iK}"]`);
 await sleep(500);
 await ui.click(`.slot[data-slot="${iK}"] [data-kkbtn="${iK}"]`);
 await sleep(700);
-await ovClicar(`[data-kkset="${iK}|auto"]`);
-await sleep(12000);
-check('resgate automático (canais com pontos, inclusive offline)', /KICK REDEEM (faasii|offlinecara) r1/.test(mockOut), mockOut.split('\n').filter((l) => l.includes('KICK')).join(' / '));
+check('sem resgate automático no painel da Kick', !/Resgatar sozinho/.test(await ovTexto()));
 await ui.keyboard.press('Escape');
 await sleep(300);
 
 // Kick global (barra de cima): atalho para todas as contas logadas na Kick
 const kkg = () => ui.$$eval('#kkg button', (e) => e.map((b) => b.dataset.kkg + ':' + (b.className || 'off') + (b.disabled ? ':dis' : '')));
 const g0 = await kkg();
-check('Kick global aparece com as contas logadas (farmar e resgatar ligados, player leve)', g0.join() === 'ligado:on,auto:on,leve:on', g0.join());
+check('Kick global aparece com as contas logadas (farmar ligado, player leve)', g0.join() === 'ligado:on,leve:on', g0.join());
 await ui.click('#kkg [data-kkg="leve"]'); await sleep(4000);
 const urlsCompl = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()).filter((u) => u.includes('/kick/')));
 check('Kick global: Player leve desligado troca para a página completa', (await kkg()).includes('leve:off') && urlsCompl.length === 2 && urlsCompl.every((u) => !u.includes('?muted')), JSON.stringify(urlsCompl));
@@ -263,12 +262,22 @@ check('Kick global: Farmar desligado fecha os players de todas', (await kkg()).i
 await shot('kick-global.png');
 await ui.click('#kkg [data-kkg="ligado"]'); await sleep(3000);
 check('Kick global: Farmar liga de novo', (await kkg()).includes('ligado:on'), (await kkg()).join());
+check('K da Kick global verde', (await ui.$eval('#kkg .kkg-t svg', (e) => getComputedStyle(e).fill)) === 'rgb(83, 252, 24)', await ui.$eval('#kkg .kkg-t svg', (e) => getComputedStyle(e).fill));
+
+// Motor do Onde caçar (igual à extensão oficial): dados do jogo baixados, worker, geometria medida
+const mot = await ui.evaluate(() => ({ v: MOTOR_V, erro: MOTOR_ERRO, res: S.map((s) => ({ nick: s.snap?.nick, n: s.res?.lista?.length ?? 0, top: s.top?.map((r) => r.hunt.slug + ' ' + r.risco.txt) ?? [], ver: s.res?.versao, bonus: s.res?.bonusXp?.pokemon })), geo: Object.keys(geoJunta()) }));
+check('motor carregou os dados do jogo (worker)', !!mot.v && !mot.erro, JSON.stringify({ v: mot.v, erro: mot.erro }));
+check('ranking calculado em todas as contas com pokémon', mot.res.filter((r) => r.n > 50 && r.top.length).length >= 3, JSON.stringify(mot.res));
+check('geometria das ondas cheias medida e repassada', mot.geo.length >= 1, JSON.stringify(mot.geo));
+await ui.click(`.slot[data-slot="${iK}"] [data-am="${iK}|mapa"]`); await sleep(800);
+const mapaTxt = await ovTexto();
+check('painel do mapa mostra o top 3 do motor novo', /Top 3/.test(mapaTxt) && /(✓|⚠)/.test(mapaTxt) && /Dados do jogo v/.test(mapaTxt), mapaTxt.replace(/\s+/g, ' ').slice(0, 400));
+await shot('mapa-motor.png');
+await ui.keyboard.press('Escape'); await sleep(300);
 
 // Golden Potion: item próprio do jogo (welcome), preço do servidor e cura em %
-const gp = await ui.evaluate(() => S.map((s) => ({ nick: s.snap?.nick, ops: opcoes(S.indexOf(s), 'item').map((o) => o.nome + '=' + o.preco).join(','), poc: s.res?.ficha?.pocao, extra: s.res?.ficha?.pocaoExtra })));
-const gSeg = gp.find((x) => x.nick === 'segunda'), gMu = gp.find((x) => x.nick === 'murilo');
+const gp = await ui.evaluate(() => S.map((s) => ({ nick: s.snap?.nick, ops: opcoes(S.indexOf(s), 'item').map((o) => o.nome + '=' + o.preco).join(',') })));
 check('Golden Potion aparece na compra com o preço do servidor', gp.every((x) => /Golden Potion=4000/.test(x.ops)) && gp.every((x) => /Small Potion=50/.test(x.ops)), JSON.stringify(gp.map((x) => x.ops)));
-check('ficha usa a Golden Potion quando ela está na auto-poção (cura 100%)', gSeg?.poc === '90001' && gSeg?.extra?.pct === 1 && gMu?.poc === '201', JSON.stringify([gSeg, gMu]));
 
 // zoom manual do jogo pela engrenagem
 await ui.click('.slot[data-slot="1"] [data-gear="1"]'); await sleep(600);

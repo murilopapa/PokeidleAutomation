@@ -1,4 +1,3 @@
-- Golden Potion: aparece na compra automática e entra no cálculo de onde caçar (cura em % do HP)
-- Preço das poções na compra agora é o que a loja do jogo cobra de verdade
-- Bônus de XP da Kick entra no cálculo de onde caçar
-- Kick na barra de cima: Farmar, Resgatar e Player leve de uma vez em todas as contas logadas
+- Onde caçar com o mesmo cálculo da extensão oficial do jogo: dados e fórmulas da versão do jogo no ar (baixados sozinhos quando o jogo atualiza), geometria das hunts medida enquanto você caça e risco ✓ / ⚠ / ☠ igual ao dela
+- Troca de mapa automática usa esse ranking (nunca vai para hunt ☠)
+- Kick: saiu o resgate automático (não funcionava); o K da barra de cima ficou verde

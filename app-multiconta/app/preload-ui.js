@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('app', {
     onEstado: on('att:estado'),
   },
   onZoom: on('slot:zoom'),
+  onJogo: on('jogo:estado'),
+  // troca de hunt pedida pela interface (troca automática): o jogo só obedece com as chaves ligadas
+  huntAuto: (i, slug) => ipcRenderer.send('ui:hunt-auto', i, slug),
   kick: {
     set: (i, campo, valor) => ipcRenderer.invoke('kk:set', i, campo, valor),
     resgatar: (i, slug, tipo) => ipcRenderer.invoke('kk:resgatar', i, slug, tipo),

@@ -19,7 +19,8 @@ for (const f of ['data/guia.json', 'data/especies.json']) fs.copyFileSync(path.j
 
 // 2) preload do jogo: o mesmo código dos content scripts, num arquivo só
 const principal = ler('page/proto.js') + '\n;\n' + ler('page/inject.js');
-const isolado = ['content/defaults.js', 'content/fmt.js', 'content/bridge.js', 'sidepanel/hunts.js', 'content/autohunt.js']
+// Sem hunts.js/autohunt.js: no app o cálculo e a troca automática ficam na interface (ui/motor/).
+const isolado = ['content/defaults.js', 'content/fmt.js', 'content/bridge.js']
   .map((f) => `// ===== ${f} (extensão ${versao}) =====\n${ler(f)}`).join('\n;\n');
 const cabeca = fs.readFileSync(path.join(APP, 'tools', 'preload-jogo.head.js'), 'utf8');
 const saida = `// GERADO por tools/sync.mjs a partir da extensão ${versao}. Não edite à mão.\n`
