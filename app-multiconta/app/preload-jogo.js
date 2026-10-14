@@ -109,14 +109,14 @@ var PIE_DEFAULT_CFG = {
   sniper: {
     enabled: false,
     modo: 'simular',               // 'simular' (só anota) | 'comprar' (precisa da chave geral também)
-    versao: 2,
-    alvos: ['boss', 'chave', 'bike'], // Boss Token, Key Fragment (chave), Bicycle Fragment (bike)
+    versao: 3,
+    alvos: [],                     // 'boss' (Boss Token), 'chave' (Key Fragment), 'bike' (Bicycle Fragment): nenhum marcado
     desconto: 30,                  // % abaixo do preço de referência
     amostras: 4,                   // referência = mediana das últimas N vendas e dos N outros anúncios mais baratos (a menor)
     reservaGold: 0,                // nunca deixar os Coins abaixo disto
     moedas: {
-      orb: { on: true, tetoDia: 100 },      // Gemas (dinheiro de verdade): teto de gasto em 24 h
-      gold: { on: false, tetoDia: 1000000 },
+      orb: { on: false, tetoDia: 0 },       // Gemas (dinheiro de verdade): teto de gasto em 24 h (0 = não compra)
+      gold: { on: false, tetoDia: 0 },
     },
   },
 };
@@ -128,8 +128,9 @@ function pieMergeCfg(saved) {
     ...d,
     ...saved,
     limits: { ...d.limits, ...(saved.limits || {}) },
-    // sniper da versão 1 (categorias, foco em Coins): vira o da versão 2 (3 alvos, foco em Gemas), mantendo ligado/modo/%.
-    sniper: saved.sniper?.versao === 2
+    // config de sniper antiga: alvos e moedas voltam para desmarcados (nada compra sem você escolher);
+    // ficam só o ligado/modo/% que você já tinha escolhido.
+    sniper: saved.sniper?.versao === 3
       ? { ...d.sniper, ...saved.sniper, moedas: { gold: { ...d.sniper.moedas.gold, ...(saved.sniper.moedas?.gold || {}) }, orb: { ...d.sniper.moedas.orb, ...(saved.sniper.moedas?.orb || {}) } } }
       : { ...d.sniper, ...(saved.sniper ? { enabled: !!saved.sniper.enabled, modo: saved.sniper.modo === 'comprar' ? 'comprar' : 'simular', desconto: saved.sniper.desconto ?? d.sniper.desconto, amostras: saved.sniper.amostras ?? d.sniper.amostras } : {}) },
     autoHunt: { ...d.autoHunt, ...(saved.autoHunt || {}), ...(saved.autoHunt?.riscoMax === 'médio' ? { riscoMax: 'alto' } : {}) },
