@@ -51,6 +51,7 @@ function salvarCfg(i, c) {
   S[i].cfg = c;
   app.setCfg(i, c);
   renderSlot(i);
+  if (MODO === 'ultra') renderUltra();
 }
 function mudarRegra(i, id, kind, patch) {
   const c = cfgDe(i);
@@ -774,32 +775,133 @@ function renderModos() {
   document.querySelectorAll('#modos [data-modo]').forEach((b) => b.classList.toggle('on', b.dataset.modo === MODO));
   renderUltra();
 }
-// Tela preta do Ultra eco: só texto, atualizada quando chega dado novo das contas.
+// Ultra eco: os jogos não são desenhados (nem por dentro); no lugar, um cartão por conta com o
+// que dá para acompanhar de longe. Cada cartão só é redesenhado quando o conteúdo dele muda.
+const ACHADOS = [
+  ['bossTokens', 'Boss Token'], ['fragChave', 'Frag. de chave'], ['fragBicicleta', 'Frag. de bike'], ['fragShiny', 'Frag. shiny stone'],
+  ['fragMega', 'Frag. mega'], ['fragMegaShiny', 'Frag. mega shiny'], ['tmPeca', 'Peça de TM'], ['tmPecaAoe', 'Peça de TM AoE'],
+  ['ticketMistico', 'Mystic Ticket'], ['ticketSafari', 'Safari Ticket'], ['fragOvoShiny', 'Frag. ovo shiny'],
+];
+const ICONE_FEED = { captura: '●', shiny: '✨', drop: '◆', boss: '♛', desmaio: '✖' };
+const tempoCurto = (ms) => { const m = Math.floor(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`; };
+const horaCurta = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+function retratoPk(pk) {
+  if (!pk) return '';
+  const dex = PieHunt.dexDoRetrato(pk.speciesId);
+  return dex > 0 ? `<img alt="" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pk.shiny ? 'shiny/' : ''}${dex}.png">` : '';
+}
+function barraHp(p, grande) {
+  const max = Number(p?.maxHp) || 0, hp = Math.max(0, Number(p?.hp) || 0);
+  if (!max) return '';
+  const pct = Math.max(0, Math.min(100, (hp / max) * 100));
+  const cor = pct > 50 ? 'ok' : pct > 20 ? 'warn' : 'bad';
+  return `<div class="u-hp ${grande ? 'g' : ''} ${cor}" title="${num(hp)} / ${num(max)} HP"><i style="width:${pct.toFixed(1)}%"></i></div>`;
+}
+// O que a conta usa de bola e de poção: o que o automático do jogo usa; se não tiver, o da nossa regra.
+function consumivel(i, kind) {
+  const s = S[i], snap = s.snap, cat = s.catalog;
+  const ga = snap?.gameAuto || {};
+  const rid = kind === 'ball' ? ID_BOLA : ID_POCAO;
+  const id = (kind === 'ball' ? ga.ballIds?.[0] : ga.potionIds?.[0]) ?? regra(i, rid)?.refId ?? null;
+  if (id == null) return null;
+  const nome = kind === 'ball' ? (cat?.bolas?.find((b) => b.id === Number(id))?.nome || 'Bola') : (cat?.items?.[id]?.name || 'Poção');
+  const q = estoque(i, kind, id) ?? 0;
+  const r = regra(i, rid);
+  const pouco = q < Math.max(1, r?.enabled ? r.min : kind === 'ball' ? 50 : 20);
+  return { nome, q, pouco };
+}
+function ultraDados(i) {
+  const s = S[i], snap = s.snap;
+  if (!snap?.ready) return { i, carregando: true };
+  const agora = Date.now();
+  const team = snap.team || [];
+  const pk = team.find((p) => p.id === snap.activeId) || s.pk || team[0] || null;
+  const ses = snap.sessao, sesH = ses && ses.ms >= 5 * 60000 ? 3600000 / ses.ms : null;
+  let lugar = 'fora de hunt', st = 'parado', cls = 'warn';
+  if (!snap.connected) { lugar = 'sem conexão com o jogo'; st = 'desconectado'; cls = 'bad'; }
+  else if (snap.arena) { lugar = 'Arena do boss'; st = 'boss'; cls = 'ok'; }
+  else if (snap.mistico) { lugar = 'Arena Mística'; st = 'mística'; cls = 'ok'; }
+  else if (snap.noCentro) { lugar = 'Centro Pokémon'; st = 'curando'; cls = 'warn'; }
+  else if (snap.huntSlug) { lugar = nomeHunt(i, snap.huntSlug); st = 'caçando'; cls = 'ok'; }
+  const parado = st === 'caçando' && snap.ultimoCombate && agora - snap.ultimoCombate > 5 * 60000;
+  if (parado) { st = `sem luta há ${tempoCurto(agora - snap.ultimoCombate)}`; cls = 'warn'; }
+  if (S[i].alerta && cls === 'ok') cls = 'warn';
+  const b = snap.bonus || {}, bonus = [];
+  if (b.vipAte > agora) bonus.push('VIP');
+  if (b.twitchPct > 0) bonus.push(`Twitch +${b.twitchPct}%`);
+  if (Object.values(snap.kick?.bonus || {}).some((t) => t > agora)) bonus.push('Kick');
+  if (b.guildBoostAte > agora) bonus.push('Guild');
+  return {
+    i, pk, team, lugar, st, cls, bonus, ses,
+    area: snap.huntSlug && !snap.noCentro ? s.rAtual?.hunt?.area : '',
+    xp: xphReal(i), xpEst: xphReal(i) == null ? S[i].rAtual?.xpH ?? null : null,
+    ouroH: sesH && ses.gold ? Math.round(ses.gold * sesH) : null,
+    abH: snap.xpMedido?.kph ?? (sesH && ses.abates ? Math.round(ses.abates * sesH) : null),
+    bola: consumivel(i, 'ball'), poc: consumivel(i, 'item'),
+    achados: ses ? ACHADOS.filter(([k]) => ses[k] > 0).map(([k, n]) => [n, ses[k]]) : [],
+    feed: (snap.feed || []).slice(-3).reverse(),
+    desmaiosH: snap.desmaiosH || 0,
+  };
+}
+function cartaoUltra(d) {
+  const i = d.i, c = cfgDe(i), snap = S[i].snap;
+  const sw = (k, nome, on) => `<button class="u-sw ${on ? 'on' : ''}" data-amt="${i}|${k}" title="${on ? 'Desligar' : 'Ligar'} ${nome.toLowerCase()}"><i></i>${nome}</button>`;
+  const chaves = `<div class="u-sws"><label class="sw u-master" title="Chave geral desta conta"><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span><span>Automação</span></label>`
+    + `<span class="u-swg ${c.enabled ? '' : 'desl'}">${sw('bola', 'Bola', regra(i, ID_BOLA)?.enabled)}${sw('poc', 'Poção', regra(i, ID_POCAO)?.enabled)}${sw('mapa', 'Mapa', c.autoHunt?.enabled)}${sw('sniper', 'Sniper', c.sniper?.enabled)}</span></div>`;
+  if (d.carregando) return `<div class="u-cab2"><span class="dot"></span><b>${nomeConta(i)}</b><span class="u-st">carregando o jogo…</span></div>${chaves}`;
+  const pk = d.pk, ses = d.ses;
+  const outros = d.team.filter((p) => p !== pk);
+  const num2 = (v, est) => (v == null ? '—' : (est ? '≈ ' : '') + curto(v));
+  const cons = (x, tipo) => (x ? `<span class="u-cons ${tipo} ${x.pouco ? 'pouco' : ''}" title="${x.pouco ? 'Está acabando' : 'Em uso'}"><i></i><b>${num(x.q)}</b> ${esc(x.nome)}</span>` : '');
+  return `<div class="u-cab2"><span class="dot ${d.cls === 'ok' ? 'hunt' : d.cls === 'bad' ? 'bad' : 'fight'}"></span><b>${nomeConta(i)}</b><small>Nv ${num(snap.level)}</small>`
+    + `${d.bonus.map((x) => `<span class="u-bn">${esc(x)}</span>`).join('')}<span class="sp"></span><span class="u-st ${d.cls}">${esc(d.st)}</span></div>`
+    + `<div class="u-pkb"><div class="u-ret">${retratoPk(pk)}</div><div class="u-pki">`
+    + `<div class="u-pkn">${pk ? `${pk.shiny ? '✨ ' : ''}<b>${esc(pk.nome)}</b> <small>Nv ${num(pk.level)}</small>` : '<small>sem pokémon ativo</small>'}</div>`
+    + barraHp(pk, true)
+    + `<div class="u-lug">${esc(d.lugar)}${d.area ? ` <small>${esc(String(d.area).replace(/^./, (x) => x.toUpperCase()))}</small>` : ''}</div>`
+    + (outros.length ? `<div class="u-time">${outros.slice(0, 5).map((p) => `<span title="${esc(p.nome)} Nv ${num(p.level)}">${barraHp(p)}</span>`).join('')}</div>` : '')
+    + `</div></div>`
+    + `<div class="u-nums"><div><small>XP/h${d.xp == null && d.xpEst != null ? ' (estim.)' : ''}</small><b class="xp">${num2(d.xp ?? d.xpEst, d.xp == null && d.xpEst != null)}</b></div>`
+    + `<div><small>Ouro/h</small><b class="ouro">${num2(d.ouroH)}</b></div><div><small>Abates/h</small><b>${num2(d.abH)}</b></div></div>`
+    + `<div class="u-sal"><span>Ouro <b>${curto(snap.gold)}</b></span><span>Gemas <b>${num(snap.orbs)}</b></span>${snap.diamonds ? `<span>Diamantes <b>${num(snap.diamonds)}</b></span>` : ''}</div>`
+    + `<div class="u-sal">${cons(d.bola, 'bola')}${cons(d.poc, 'poc')}</div>`
+    + (ses ? `<div class="u-ses"><span>Sessão <b>${tempoCurto(ses.ms)}</b></span><span><b>${num(ses.abates)}</b> abates</span><span><b>${num(ses.capturas)}</b> capturas</span>${ses.shinies || ses.shiniesVistos ? `<span class="sh">✨ <b>${ses.shinies}</b>/${ses.shiniesVistos} shiny</span>` : ''}${d.desmaiosH ? `<span class="bad"><b>${d.desmaiosH}</b> desmaio${d.desmaiosH > 1 ? 's' : ''} na última hora</span>` : ''}</div>` : '')
+    + (d.achados.length ? `<div class="u-ach">${d.achados.map(([n, q]) => `<span>${esc(n)} <b>×${num(q)}</b></span>`).join('')}</div>` : '')
+    + (d.feed.length ? `<div class="u-feed">${d.feed.map((f) => `<div class="${f.tipo}"><small>${horaCurta(f.t)}</small> ${ICONE_FEED[f.tipo] || '·'} ${esc(f.texto)}</div>`).join('')}</div>` : '')
+    + chaves;
+}
 function renderUltra() {
   const el = $('#ultra');
   const on = MODO === 'ultra';
   document.body.classList.toggle('modo-ultra', on);
   if (!on) { if (el.innerHTML) { el.innerHTML = ''; el.dataset.h = ''; } return; }
-  const cap = (t) => String(t || '').replace(/^./, (c) => c.toUpperCase());
-  // só as contas ligadas: nome · pokémon farmando · lugar · XP/h · automação
-  const linhas = S.map((s, i) => {
-    if (s.desligada) return '';
-    const xp = xphAgora(i), auto = !!cfgDe(i).enabled, pk = s.pk;
-    const snap = s.snap;
-    const lugar = !snap?.ready ? 'carregando…' : snap.noCentro ? 'Centro Pokémon' : snap.huntSlug ? nomeHunt(i, snap.huntSlug) : 'fora de hunt';
-    const area = snap?.huntSlug && !snap.noCentro ? cap(s.rAtual?.hunt?.area) : '';
-    return `<div class="u-l"><span class="dot ${estadoPonto(i)}"></span>`
-      + `<b class="u-n">${nomeConta(i)}</b>`
-      + `<span class="u-pk">${pk ? `${pk.shiny ? '✨ ' : ''}${esc(pk.nome)} <small>Nv ${num(pk.level)}</small>` : '—'}</span>`
-      + `<span class="u-h">${esc(lugar)}${area ? ` <small>${esc(area)}</small>` : ''}</span>`
-      + `<span class="u-x">${xp != null ? curto(xp) + ' XP/h' : ''}</span>`
-      + `<span class="u-a ${auto ? 'on' : ''}">${auto ? 'automação ligada' : 'automação desligada'}</span></div>`;
-  }).join('');
-  const html = `<div class="u-box"><div class="u-t">Ultra eco</div>`
-    + `<p>Os jogos continuam rodando (caça, compras e troca de mapa), só não são desenhados. Menos processador e placa de vídeo.</p>`
-    + (linhas ? `<div class="u-lista"><div class="u-l u-cab"><span></span><span>Conta</span><span>Pokémon</span><span>Lugar</span><span>XP/h</span><span></span></div>${linhas}</div>` : '<div class="u-lista"><div class="u-l off">Todas as contas estão desligadas.</div></div>')
-    + `<div class="u-b"><button data-modo="eco">Ver os jogos (Eco)</button><button data-modo="normal" class="ghost">Normal</button></div></div>`;
-  if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
+  const ligadas = [];
+  for (let i = 0; i < N; i++) if (S[i] && !S[i].desligada) ligadas.push(i);
+  const dados = ligadas.map(ultraDados);
+  const soma = (f) => dados.reduce((t, d) => t + (Number(f(d)) || 0), 0);
+  const tot = {
+    ouroH: soma((d) => d.ouroH), xp: soma((d) => d.xp ?? d.xpEst),
+    cap: soma((d) => d.ses?.capturas), sh: soma((d) => d.ses?.shinies),
+    ach: soma((d) => (d.achados || []).reduce((t, [, q]) => t + q, 0)), gemas: soma((d) => (d.carregando ? 0 : S[d.i].snap?.orbs)),
+  };
+  const esq = `<div class="u-tot"><div class="u-tit">Ultra eco<small>os jogos seguem rodando, só não são desenhados</small></div>`
+    + `<div><small>Ouro/h</small><b class="ouro">${curto(tot.ouroH)}</b></div><div><small>XP/h somado</small><b class="xp">${curto(tot.xp)}</b></div>`
+    + `<div><small>Capturas na sessão</small><b>${num(tot.cap)}${tot.sh ? ` <span class="sh">✨${tot.sh}</span>` : ''}</b></div>`
+    + `<div><small>Achados</small><b>${num(tot.ach)}</b></div><div><small>Gemas</small><b>${num(tot.gemas)}</b></div>`
+    + `<span class="sp"></span><div class="u-b"><button data-modo="eco">Ver os jogos (Eco)</button><button data-modo="normal" class="ghost">Normal</button></div></div>`;
+  const forma = `${ligadas.join(',')}`;
+  if (el.dataset.forma !== forma || !el.querySelector('.u-tot')) {
+    el.innerHTML = `<div class="u-wrap"><div class="u-topo"></div>${ligadas.length ? `<div class="u-cards n${ligadas.length}">${ligadas.map((i) => `<div class="u-card" data-uc="${i}"></div>`).join('')}</div>` : '<div class="u-vazio">Todas as contas estão desligadas.</div>'}</div>`;
+    el.dataset.forma = forma;
+  }
+  const topo = el.querySelector('.u-topo');
+  if (topo.dataset.h !== esq) { topo.innerHTML = esq; topo.dataset.h = esq; }
+  for (const d of dados) {
+    const box = el.querySelector(`[data-uc="${d.i}"]`);
+    if (!box) continue;
+    const h = cartaoUltra(d);
+    if (box.dataset.h !== h) { box.innerHTML = h; box.dataset.h = h; }
+  }
 }
 // Botão da versão: só diz se tem atualização ou não (sem "procurando").
 function renderAtt() {

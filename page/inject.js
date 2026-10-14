@@ -142,6 +142,7 @@
         if (ev.k === 'ataque') S.ultimoCombate = Date.now();
         if (ev.k === 'morte' && ev.quem === 'selvagem') registrarAbate(ev);
         if (ev.k === 'hunt' && ev.trocaLivreEm) S.trocaLivreEm = Number(ev.trocaLivreEm) || 0;
+        feedBatalha(ev);
       }
     }
     if (m.estado?.servidorAgora) S.desvio = Date.now() - m.estado.servidorAgora;
@@ -727,6 +728,57 @@
     return { porHora: out, janelaMin: Math.round(janela / 60000) };
   }
 
+  // ------------------------------------------------------------ painel do Ultra eco
+  // O que vale a pena ver sem olhar o jogo: capturas, drops raros, boss e desmaios. Guardado no
+  // navegador da conta para sobreviver a um recarregar da página.
+  const FEED_CHAVE = 'pie-feed', FEED_MAX = 12;
+  const DROPS_RAROS = new Set([70000, 70011, 70012, 70013, 70014, 70015, 59194, 40530]);
+  const RARO_RE = /boss token|fragment|ticket|tm disk piece/i;
+  let feed = (() => { try { const f = JSON.parse(localStorage.getItem(FEED_CHAVE)); return Array.isArray(f) ? f.slice(-FEED_MAX) : []; } catch (_) { return []; } })();
+  const desmaios = [];
+  function feedAdd(tipo, texto) {
+    feed.push({ t: Date.now(), tipo, texto });
+    if (feed.length > FEED_MAX) feed = feed.slice(-FEED_MAX);
+    try { localStorage.setItem(FEED_CHAVE, JSON.stringify(feed)); } catch (_) { /* segue */ }
+    // o jogo grava a prancheta dele até 2 s depois do evento: republica depois disso
+    clearTimeout(feedAdd.t);
+    feedAdd.t = setTimeout(() => publish(), 2500);
+  }
+  function feedBatalha(ev) {
+    if (ev.k === 'capturado' && ev.pokemon) {
+      const p = ev.pokemon;
+      feedAdd(p.shiny ? 'shiny' : 'captura', `${p.shiny ? 'shiny capturado: ' : 'capturou '}${p.nome} Nv ${p.level}${ev.paraDepot ? ' (Depot)' : ''}`);
+    } else if (ev.k === 'morte' && ev.quem !== 'selvagem') {
+      desmaios.push(Date.now());
+      while (desmaios.length && desmaios[0] < Date.now() - 3600000) desmaios.shift();
+      feedAdd('desmaio', 'seu pokémon desmaiou');
+    } else if (ev.k === 'bossMorto') {
+      feedAdd('boss', `boss derrotado${ev.nome ? ': ' + ev.nome : ''}`);
+    }
+    if ((ev.k === 'morte' && ev.quem === 'selvagem') || ev.k === 'bossMorto') {
+      for (const d of Array.isArray(ev.drops) ? ev.drops : []) {
+        if (DROPS_RAROS.has(Number(d?.itemId)) || RARO_RE.test(String(d?.nome ?? ''))) feedAdd('drop', `${d.nome ?? 'item ' + d.itemId} ×${Number(d.qtd) || 1}`);
+      }
+    }
+  }
+  // A prancheta de sessão do próprio jogo (o painel "Sessão"): ele grava no navegador da conta.
+  const SESSAO_CAMPOS = ['xpTreinador', 'xpPokemon', 'gold', 'abates', 'capturas', 'shiniesVistos', 'shinies',
+    'bossTokens', 'fragChave', 'fragShiny', 'fragBicicleta', 'fragMega', 'fragMegaShiny', 'tmPeca', 'tmPecaAoe',
+    'ticketMistico', 'ticketSafari', 'fragOvoShiny'];
+  function sessaoDoJogo(nick) {
+    if (!nick) return null;
+    try {
+      const g = JSON.parse(localStorage.getItem('sessao-hunt:' + String(nick).toLowerCase()));
+      if (!g || typeof g !== 'object') return null;
+      const out = { ms: Math.max(0, Number(g.ms) || 0) };
+      for (const k of SESSAO_CAMPOS) out[k] = Math.max(0, Number(g[k]) || 0);
+      const mapa = (m) => (m && typeof m === 'object' ? Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Number(v) || 0])) : {});
+      out.bolas = mapa(g.bolas);
+      out.pocoes = mapa(g.pocoes);
+      return out;
+    } catch (_) { return null; }
+  }
+
   // ------------------------------------------------------------ resumo publicado
   const pkResumo = (p) => ({
     id: p.id,
@@ -782,6 +834,10 @@
         autoVoltarHunt: !!a.autoVoltarHunt,
       },
       uso: ritmos(),
+      sessao: sessaoDoJogo(e.nick),
+      feed: feed.slice(-6),
+      desmaiosH: desmaios.filter((t) => t > Date.now() - 3600000).length,
+      ultimoCombate: S.ultimoCombate ?? null,
       xpMedido: xpMedidoAgora(),
       multXp: multXpAgora(multsXp),
       multXpTr: multXpAgora(multsXpTr),

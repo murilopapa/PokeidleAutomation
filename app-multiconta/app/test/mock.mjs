@@ -22,7 +22,11 @@ const GAME_HTML = `<!doctype html><html><head><title>Poke Idle IO — MMO</title
   document.getElementById('eco-sair').addEventListener('click', () => defEco(false));
   const ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://') + location.host + '/ws');
   window.addEventListener('beforeunload', (e) => { e.preventDefault(); e.returnValue = ''; });
-  ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.estado?.nick) document.getElementById('nick').textContent = m.estado.nick; if (m.estado?.huntSlug) document.getElementById('hunt').textContent = m.estado.huntSlug; };
+  // a prancheta de sessão que o jogo grava no navegador (sessao-hunt:<nick>)
+  const sessaoFalsa = (nick) => localStorage.setItem('sessao-hunt:' + nick, JSON.stringify(nick === 'murilo'
+    ? { ms: 11520000, xpTreinador: 9e6, xpPokemon: 2.8e8, gold: 1310000, abates: 5840, capturas: 31, shiniesVistos: 1, shinies: 0, bossTokens: 1, fragChave: 2, fragBicicleta: 1, bolas: { 1: 40 }, pocoes: { 201: 12 } }
+    : { ms: 3900000, gold: 220000, abates: 1020, capturas: 12, shiniesVistos: 1, shinies: 1, bolas: {}, pocoes: {} }));
+  ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.t === 'welcome' && m.estado?.nick) sessaoFalsa(m.estado.nick); if (m.estado?.nick) document.getElementById('nick').textContent = m.estado.nick; if (m.estado?.huntSlug) document.getElementById('hunt').textContent = m.estado.huntSlug; };
 </script></body></html>`;
 
 let contas = 0;
@@ -31,7 +35,7 @@ const INST_SHA = (await import('node:crypto')).createHash('sha256').update(INST)
 function estadoCheio(n) {
   return {
     cheio: true, nick: ['murilo', 'segunda', 'terceira', 'quarta'][n % 4], level: [87, 120, 60, 40][n % 4], gold: 500000, xp: 50000,
-    loja: { vipAte: 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 1000,
+    loja: { vipAte: n % 4 === 0 ? Date.now() + 864e5 : 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 1000,
     huntSlug: n % 4 === 3 ? null : n % 4 === 1 ? 'tangela' : 'kadabra', noCentro: n % 4 === 3, activeId: 11,
     balls: { 1: 48, 2: 5 }, items: { 200: 30, 201: 4 },
     automation: { autoPotion: true, autoBall: true, ballIds: [1], potionIds: n % 4 === 1 ? [201, 90001] : [201] },
@@ -130,6 +134,14 @@ wssJogo.on('connection', (ws) => {
     itensNossos: [{ id: 90001, name: 'Golden Potion', category: 'heal', npcPrice: 5000, healPct: 1 }],
     itensCompraveis: [{ itemId: 200, preco: 50 }, { itemId: 201, preco: 150 }, { itemId: 90001, preco: 4000 }],
   }));
+  // eventos que o painel do Ultra eco mostra: captura (shiny na 2ª conta), drop raro e desmaio
+  if (e.huntSlug && !e.noCentro) {
+    setTimeout(() => ws.send(JSON.stringify({ t: 'batalha', ev: [
+      { k: 'capturado', pokemon: { nome: n % 4 === 1 ? 'Zubat' : 'Ditto', level: n % 4 === 1 ? 33 : 50, shiny: n % 4 === 1 } },
+      { k: 'morte', quem: 'selvagem', nome: 'Kadabra', xp: 10, ouro: 5, drops: [{ itemId: 70011, nome: 'Key Fragment', qtd: 1 }, { itemId: 1, nome: 'Twisted Spoon', qtd: 1 }] },
+      ...(n % 4 === 1 ? [{ k: 'morte', quem: 'jogador' }] : []),
+    ] })), 2500);
+  }
   // uma onda cheia na hunt (para a geometria medida): 15 selvagens nascendo juntos
   if (e.huntSlug && !e.noCentro) {
     setTimeout(() => {

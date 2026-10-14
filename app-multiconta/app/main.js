@@ -130,6 +130,7 @@ function criarView(i) {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  wc.on('did-start-navigation', (d) => { if (d.isMainFrame && !d.isSameDocument) cssLeve[i] = null; });
   wc.on('did-finish-load', () => { aplicarZoom(i); ecoNoJogo(i); });
   atalhosDeZoom(wc, (p) => zoomConta(i, p));
   wc.on('render-process-gone', () => setTimeout(() => !wc.isDestroyed() && wc.reload(), 3000));
@@ -264,8 +265,27 @@ const MODOS = ['normal', 'eco', 'ultra'];
 const modo = () => (MODOS.includes(appCfg.modo) ? appCfg.modo : 'normal');
 function ecoNoJogo(i) {
   const v = views[i];
-  if (!appCfg.modo || !v || v.webContents.isDestroyed()) return;
+  if (!v || v.webContents.isDestroyed()) return;
+  paginaLeve(i, modo() === 'ultra');
+  if (!appCfg.modo) return;
   v.webContents.send('jogo:eco', modo() !== 'normal');
+}
+// Ultra eco: a página do jogo some por dentro (o navegador para de recalcular estilo e layout a
+// cada evento). insertCSS passa pela CSP do jogo; sair do modo tira o CSS, sem recarregar.
+const CSS_LEVE = 'body>*{display:none!important}*,*::before,*::after{animation:none!important;transition:none!important}';
+const cssLeve = [];
+async function paginaLeve(i, ligar) {
+  const wc = views[i]?.webContents;
+  if (!wc || wc.isDestroyed()) return;
+  wc.send('jogo:leve', ligar);
+  if (ligar && !cssLeve[i]) {
+    cssLeve[i] = 'pendente';
+    try { cssLeve[i] = await wc.insertCSS(CSS_LEVE); } catch (_) { cssLeve[i] = null; }
+    if (modo() !== 'ultra') paginaLeve(i, false);
+  } else if (!ligar && cssLeve[i] && cssLeve[i] !== 'pendente') {
+    const k = cssLeve[i]; cssLeve[i] = null;
+    try { await wc.removeInsertedCSS(k); } catch (_) { /* segue */ }
+  }
 }
 function definirModo(m) {
   if (!MODOS.includes(m)) return modo();

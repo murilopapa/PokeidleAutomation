@@ -84,4 +84,20 @@ ipcRenderer.on('jogo:eco', (_e, ligar) => {
   else __pieEcoAplicar();
 });
 
+// --- Ultra eco: além do Modo Economia do jogo, a página some por dentro. O CSS (display:none no
+// corpo, animações paradas) é posto pelo app com insertCSS, que passa pela CSP do jogo; aqui só a
+// marca no <html> e a pausa de áudio/vídeo. Sair do modo não recarrega nada.
+let __pieLeve = false;
+function __pieLeveAplicar() {
+  const raiz = document.documentElement;
+  if (!raiz) return;
+  raiz.classList.toggle('pie-leve', __pieLeve);
+  if (__pieLeve) for (const m of document.querySelectorAll('audio,video')) { try { m.pause(); } catch (_) { /* segue */ } }
+}
+ipcRenderer.on('jogo:leve', (_e, ligar) => {
+  __pieLeve = !!ligar;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', __pieLeveAplicar, { once: true });
+  else __pieLeveAplicar();
+});
+
 // --- 2) content scripts da extensão (mesma ordem do manifest)
