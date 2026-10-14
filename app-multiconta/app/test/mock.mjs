@@ -31,7 +31,7 @@ const INST_SHA = (await import('node:crypto')).createHash('sha256').update(INST)
 function estadoCheio(n) {
   return {
     cheio: true, nick: ['murilo', 'segunda', 'terceira', 'quarta'][n % 4], level: [87, 120, 60, 40][n % 4], gold: 500000, xp: 50000,
-    loja: { vipAte: 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 0,
+    loja: { vipAte: 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 1000,
     huntSlug: n % 4 === 3 ? null : n % 4 === 1 ? 'tangela' : 'kadabra', noCentro: n % 4 === 3, activeId: 11,
     balls: { 1: 48, 2: 5 }, items: { 200: 30, 201: 4 },
     automation: { autoPotion: true, autoBall: true, ballIds: [1], potionIds: n % 4 === 1 ? [201, 90001] : [201] },
@@ -126,7 +126,7 @@ wssJogo.on('connection', (ws) => {
     tabelaTipos: FX.tipos, ampliacaoHunt: 1.5, multHpSelvagem: 5, multDanoSelvagem: 1.8,
     captura: { base: 0.0075 }, chanceShiny: 0.001, tiposBoost: [],
     // Item próprio do jogo (não está no items.json) e preços cobrados pelo servidor.
-    mercado: { cooldownCompraMs: 120000, catalogo: [{ id: 2, nome: 'Fire Stone', categoria: 'stone' }, { id: 3, nome: 'Water Stone', categoria: 'stone' }, { id: 4, nome: 'Air Tank', categoria: 'loot' }, { id: 9, nome: 'Charizardite X', categoria: 'mega' }] },
+    mercado: { cooldownCompraMs: 120000, catalogo: [{ id: 2, nome: 'Bicycle Fragment', categoria: 'fragment' }, { id: 3, nome: 'Key Fragment', categoria: 'fragment' }, { id: 4, nome: 'Fire Stone', categoria: 'stone' }, { id: 9, nome: 'Bronze Boss Token', categoria: 'boss' }] },
     itensNossos: [{ id: 90001, name: 'Golden Potion', category: 'heal', npcPrice: 5000, healPct: 1 }],
     itensCompraveis: [{ itemId: 200, preco: 50 }, { itemId: 201, preco: 150 }, { itemId: 90001, preco: 4000 }],
   }));
@@ -141,33 +141,32 @@ wssJogo.on('connection', (ws) => {
     const m = JSON.parse(raw);
     log.push({ conta: n, ...m });
     console.log('JOGO', n, JSON.stringify(m));
-    // Mercado falso: Fire Stone com um anúncio 40% abaixo da média (retido por 6 s) e outro caro;
-    // Water Stone barata mas com poucas vendas; Air Tank barato mas fora das categorias.
+    // Mercado falso (em Gemas): Bicycle Fragment com um anúncio barato (retido 20 s) e outros normais;
+    // Key Fragment sozinho e sem vendas (sem referência); Fire Stone barata mas fora dos alvos.
     if (m.t === 'market.itens') {
       ws.send(JSON.stringify({ t: 'market', aba: 'itens',
-        resumo: { 2: { anuncios: 2, unidades: 4, minGold: 6000, minOrb: null }, 3: { anuncios: 1, unidades: 1, minGold: 1000 }, 4: { anuncios: 1, unidades: 5, minGold: 10 } },
-        medias: { 2: { gold: { media: 10000, unidades: 20 } }, 3: { gold: { media: 5000, unidades: 2 } }, 4: { gold: { media: 1000, unidades: 50 } } } }));
+        resumo: { 2: { anuncios: 4, unidades: 11, minGold: null, minOrb: 60 }, 3: { anuncios: 1, unidades: 1, minOrb: 10 }, 4: { anuncios: 1, unidades: 5, minOrb: 1, minGold: 10 } },
+        medias: { 2: { orb: { media: 100, unidades: 20 } } } }));
     }
     if (m.t === 'market.item') {
       ws.mercadoLib ??= Date.now() + 20000; // a retenção do anúncio 501 acaba 20 s depois da 1ª consulta
-      const linhas = m.itemId === 2 ? [
-        { id: 501, tipo: 'item', qtd: 3, preco: 6000, moeda: 'gold', vendedor: 'barateiro', compravelEm: ws.mercadoLib },
-        { id: 502, tipo: 'item', qtd: 1, preco: 9000, moeda: 'gold', vendedor: 'caro', compravelEm: 0 },
-        { id: 503, tipo: 'item', qtd: 2, preco: 9500, moeda: 'gold', vendedor: 'outro', compravelEm: 0 },
-        { id: 504, tipo: 'item', qtd: 5, preco: 10000, moeda: 'gold', vendedor: 'outro2', compravelEm: 0 },
+      const linhas = m.moeda !== 'orb' ? [] : m.itemId === 2 ? [
+        { id: 501, tipo: 'item', qtd: 3, preco: 60, moeda: 'orb', vendedor: 'barateiro', compravelEm: ws.mercadoLib },
+        { id: 502, tipo: 'item', qtd: 1, preco: 90, moeda: 'orb', vendedor: 'caro', compravelEm: 0 },
+        { id: 503, tipo: 'item', qtd: 2, preco: 95, moeda: 'orb', vendedor: 'outro', compravelEm: 0 },
+        { id: 504, tipo: 'item', qtd: 5, preco: 100, moeda: 'orb', vendedor: 'outro2', compravelEm: 0 },
       ] : m.itemId === 3 ? [
-        // Water Stone: anúncio sozinho e sem vendas recentes → sem referência, não compra
-        { id: 601, tipo: 'item', qtd: 1, preco: 1000, moeda: 'gold', vendedor: 'x', compravelEm: 0 },
-      ] : [];
+        { id: 601, tipo: 'item', qtd: 1, preco: 10, moeda: 'orb', vendedor: 'x', compravelEm: 0 },
+      ] : [{ id: 701, tipo: 'item', qtd: 1, preco: 1, moeda: 'orb', vendedor: 'y', compravelEm: 0 }];
       ws.send(JSON.stringify({ t: 'market', aba: 'item', itemId: m.itemId, moeda: m.moeda, linhas }));
     }
     if (m.t === 'market.historicoGlobal') {
-      const linhas = m.itemId === 2 ? [
-        { tipo: 'item', descricao: '2× Fire Stone', bruto: 19600, moeda: 'gold', em: Date.now() - 6e5 },
-        { tipo: 'item', descricao: '1× Fire Stone', bruto: 9900, moeda: 'gold', em: Date.now() - 9e5 },
-        { tipo: 'item', descricao: '4× Fire Stone', bruto: 38800, moeda: 'gold', em: Date.now() - 2e6 },
-        { tipo: 'item', descricao: '1× Fire Stone', bruto: 9700, moeda: 'gold', em: Date.now() - 3e6 },
-        { tipo: 'item', descricao: '1× Fire Stone', bruto: 30000, moeda: 'gold', em: Date.now() - 9e6 }, // velha, fora das 4
+      const linhas = m.itemId === 2 && m.moeda === 'orb' ? [
+        { tipo: 'item', descricao: '2× Bicycle Fragment', bruto: 196, moeda: 'orb', em: Date.now() - 6e5 },
+        { tipo: 'item', descricao: '1× Bicycle Fragment', bruto: 99, moeda: 'orb', em: Date.now() - 9e5 },
+        { tipo: 'item', descricao: '4× Bicycle Fragment', bruto: 388, moeda: 'orb', em: Date.now() - 2e6 },
+        { tipo: 'item', descricao: '1× Bicycle Fragment', bruto: 97, moeda: 'orb', em: Date.now() - 3e6 },
+        { tipo: 'item', descricao: '1× Bicycle Fragment', bruto: 300, moeda: 'orb', em: Date.now() - 9e6 }, // velha, fora das 4
       ] : [];
       ws.send(JSON.stringify({ t: 'market', aba: 'historicoGlobal', seq: m.seq, pagina: 0, linhas }));
     }
@@ -176,7 +175,7 @@ wssJogo.on('connection', (ws) => {
       if (m.id === 501 && Date.now() < ws.mercadoLib) ws.send(JSON.stringify({ t: 'erro', chave: 'market.retencao' }));
       else {
         ws.send(JSON.stringify({ t: 'erro', chave: 'market.sorteio' }));
-        setTimeout(() => ws.send(JSON.stringify({ t: 'batalha', ev: [{ k: 'marketComprado', descricao: `${m.qtd}× Fire Stone` }] })), 800);
+        setTimeout(() => ws.send(JSON.stringify({ t: 'batalha', ev: [{ k: 'marketComprado', descricao: `${m.qtd}× Bicycle Fragment` }] })), 800);
       }
     }
     if (m.t === 'hunt.select') ws.send(JSON.stringify({ t: 'estado', estado: { huntSlug: m.slug } }));

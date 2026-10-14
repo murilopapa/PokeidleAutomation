@@ -284,10 +284,10 @@ await ui.keyboard.press('Escape'); await sleep(300);
 // Sniper do Mercado (itens): simula, depois compra só depois da retenção, só o barato
 const iSn = await ui.$$eval('.slot', (e) => +e.find((x) => /segunda/.test(x.querySelector('.nome')?.textContent || '')).dataset.slot);
 await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sleep(800);
-check('painel do sniper abre com as categorias do Mercado', /Pedras/.test(await ovTexto()) && /Mega Stones/.test(await ovTexto()), (await ovTexto()).replace(/\s+/g, ' ').slice(0, 300));
+check('painel do sniper mostra os 3 alvos achados no Mercado', /Boss Token 1 no Mercado/.test(await ovTexto()) && /Fragmento de chave 1 no Mercado/.test(await ovTexto()) && /Fragmento de bike 1 no Mercado/.test(await ovTexto()), (await ovTexto()).replace(/\s+/g, ' ').slice(0, 300));
 await ovClicar(`[data-snon="${iSn}"]`); await sleep(8000);
 const snLog1 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
-check('simular: anota a Fire Stone barata (vs últimas vendas e vitrine) e ignora o resto', snLog1.some((l) => /^simulado: teria comprado: Fire Stone ×3 por 6\.000 Coins\/un\. — 37% abaixo \(últimas 4 vendas 9\.750 · vitrine 9\.500\)/.test(l)) && !snLog1.some((l) => /Water|Air|9\.000 Coins/.test(l)) && !/MERCADO compra/.test(mockOut), JSON.stringify(snLog1));
+check('simular: anota o fragmento de bike barato em Gemas (vs últimas vendas e vitrine) e ignora o resto', snLog1.some((l) => /^simulado: teria comprado: Bicycle Fragment ×3 por 60 Gemas\/un\. — 37% abaixo \(últimas 4 vendas 98 · vitrine 95\)/.test(l)) && !snLog1.some((l) => /Key|Fire|por 90/.test(l)) && !/MERCADO compra/.test(mockOut), JSON.stringify(snLog1));
 await shot('sniper-simular.png');
 // modo comprar (com a chave Automação da conta ligada)
 if (!(await ui.isChecked(`[data-master="${iSn}"]`))) await ui.click(`.slot[data-slot="${iSn}"] .bar label.sw`);
@@ -296,7 +296,7 @@ await sleep(28000);
 const comprasSn = mockOut.split('\n').filter((l) => l.startsWith('MERCADO compra'));
 const snLog2 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
 check('comprar: pediu só o anúncio barato e só depois de liberar', comprasSn.length === 1 && / 501 /.test(comprasSn[0]) && parseFloat(comprasSn[0].split('faltavam ')[1]) <= 0, comprasSn.join(" / "));
-check('comprar: entrou no sorteio e registrou a compra', snLog2.some((l) => /^sorteio:/.test(l)) && snLog2.some((l) => /^comprou: COMPROU: 3× Fire Stone por 18\.000 Coins/.test(l)), JSON.stringify(snLog2.slice(-5)));
+check('comprar: entrou no sorteio e registrou a compra', snLog2.some((l) => /^sorteio:/.test(l)) && snLog2.some((l) => /^comprou: COMPROU: 1× Bicycle Fragment por 60 Gemas/.test(l)), JSON.stringify(snLog2.slice(-5)));
 // a chavinha do botão liga/desliga sem abrir o menu
 await ui.keyboard.press('Escape'); await sleep(300);
 const mapa0 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
@@ -306,7 +306,7 @@ await ui.click(`.slot[data-slot="${iSn}"] [data-amt="${iSn}|mapa"]`); await slee
 const mapa2 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
 check('chavinha no botão liga e desliga sem abrir o menu', mapa1 === !mapa0 && mapa2 === mapa0 && !(await ovTexto()).trim(), JSON.stringify([mapa0, mapa1, mapa2]));
 await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sleep(800);
-check('gasto do dia contado', (await ui.evaluate((i) => S[i].sniper?.gasto?.gold, iSn)) === 18000);
+check('teto de Gemas respeitado (100/dia: levou 1 de 3) e gasto contado', (await ui.evaluate((i) => S[i].sniper?.gasto?.orb, iSn)) === 60);
 // só uma conta caça por vez
 const outraSn = (iSn + 1) % 4;
 await ui.evaluate((k) => mudarSniper(k, { enabled: true }), outraSn); await sleep(300);

@@ -391,7 +391,7 @@ function barHTML(i) {
     ${chip('bola', 'Bola', bola?.enabled, `${esc(nomeCurto(bola))} &lt; ${num(bola?.min ?? 0)}`)}
     ${chip('poc', 'Poção', poc?.enabled, `${esc(nomeCurto(poc))} &lt; ${num(poc?.min ?? 0)}`)}
     ${chip('mapa', 'Mapa', c.autoHunt?.enabled, 'top 1')}
-    ${chip('sniper', 'Sniper', c.sniper?.enabled, c.sniper?.modo === 'comprar' ? `−${c.sniper.desconto}% comprando` : `−${c.sniper?.desconto}% simulando`)}
+    ${chip('sniper', 'Sniper', c.sniper?.enabled, `${c.sniper?.moedas?.orb?.on ? 'Gemas ' : ''}−${c.sniper?.desconto}% ${c.sniper?.modo === 'comprar' ? 'comprando' : 'simulando'}`)}
     <span class="sp"></span>
     <label class="sw master-c" title="Chave geral desta conta: sem ela nada age no jogo"><span>Automação</span><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span></label>`;
 }
@@ -422,14 +422,18 @@ function painelHTML(i, k) {
 
 
 // ---- Sniper do Mercado (itens)
+const SN_ALVOS = {
+  boss: { nome: 'Boss Token', re: /boss token/i },
+  chave: { nome: 'Fragmento de chave', re: /key fragment|fragmento de chave/i },
+  bike: { nome: 'Fragmento de bike', re: /bicycle fragment|fragmento de bicicleta/i },
+};
 const CAT_MERCADO = { stone: 'Pedras', mega: 'Mega Stones', loot: 'Drops', fragment: 'Fragmentos', tm: 'TMs', card: 'Cartas', boss: 'Boss Tokens', ticket: 'Tickets', clan: 'Clã', ovo: 'Ovo Shiny', box: 'Boxes', bicicleta: 'Bicicletas', casa: 'Casas', skin: 'Skins', beast: 'Beast Ball' };
 const SN_COR = { comprou: 'ok', perdeu: 'bad', erro: 'bad', simulado: 'sim', agendado: 'ag', enviado: 'ag', sorteio: 'ag', pulado: '', info: '' };
 const hora = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 function sniperHTML(i, sw, fechar) {
   const c = cfgDe(i), sn = c.sniper, st = S[i].sniper;
-  const cats = {};
-  for (const it of S[i].catalog?.mercado?.catalogo ?? []) if (it.categoria) cats[it.categoria] = (cats[it.categoria] || 0) + 1;
-  const ordem = Object.keys(CAT_MERCADO).filter((k) => cats[k]).concat(Object.keys(cats).filter((k) => !CAT_MERCADO[k]));
+  const cat = S[i].catalog?.mercado?.catalogo ?? [];
+  const achados = (k) => cat.filter((it) => SN_ALVOS[k].re.test(it.nome || '')).map((it) => it.nome);
   const chk = (attr, on, txt) => `<label class="sn-chk"><input type="checkbox" ${attr} ${on ? 'checked' : ''}><span>${txt}</span></label>`;
   const outra = S.findIndex((s, k) => k !== i && cfgDe(k).sniper?.enabled);
   const gasto = st?.gasto || { gold: 0, orb: 0 };
@@ -449,8 +453,8 @@ function sniperHTML(i, sw, fechar) {
       <label class="field" title="Referência = a menor entre a mediana das últimas N vendas do item e a dos N outros anúncios mais baratos da vitrine">Comparar com os últimos<input type="number" min="2" max="10" value="${sn.amostras}" data-snamostras="${i}"></label>
       <label class="field">Reserva de Coins<input type="number" min="0" value="${sn.reservaGold}" data-snres="${i}"></label>
     </div>
-    <div class="sn-cats">${ordem.length ? ordem.map((k) => chk(`data-sncat="${i}|${k}"`, sn.categorias.includes(k), `${CAT_MERCADO[k] || k} <small>${cats[k]}</small>`)).join('') : '<span class="hint" style="margin:0">Abra o jogo desta conta para listar as categorias.</span>'}</div>
-    <div class="sn-moedas">${moeda('gold', 'Coins')}${moeda('orb', 'Gemas <small>(dinheiro real)</small>')}</div>
+    <div class="sn-cats">${Object.entries(SN_ALVOS).map(([k, a]) => { const n = achados(k); return chk(`data-snalvo="${i}|${k}"`, sn.alvos.includes(k), `${a.nome}${cat.length ? ` <small title="${esc(n.join(', '))}">${n.length ? n.length + ' no Mercado' : 'não achei no Mercado'}</small>` : ''}`); }).join('')}</div>
+    <div class="sn-moedas">${moeda('orb', 'Gemas <small>(dinheiro real)</small>')}${moeda('gold', 'Coins')}</div>
     ${sn.modo === 'comprar' && !c.enabled ? '<div class="res bad">A chave "Automação" desta conta está desligada: não compra nada (só simula) até ligar.</div>' : ''}
     ${tabela}
     <div class="sn-log">${log}</div>
@@ -981,9 +985,9 @@ function acaoChange(d, value, checked) {
   else if (d.sndesc) mudarSniper(+d.sndesc, { desconto: Math.min(90, Math.max(1, Math.round(Number(value) || 30))) });
   else if (d.snamostras) mudarSniper(+d.snamostras, { amostras: Math.min(10, Math.max(2, Math.round(Number(value) || 4))) });
   else if (d.snres) mudarSniper(+d.snres, { reservaGold: Math.max(0, Math.round(Number(value) || 0)) });
-  else if (d.sncat) {
-    const [i, cat] = d.sncat.split('|'), atuais = cfgDe(+i).sniper.categorias;
-    mudarSniper(+i, { categorias: checked ? [...new Set([...atuais, cat])] : atuais.filter((x) => x !== cat) });
+  else if (d.snalvo) {
+    const [i, k] = d.snalvo.split('|'), atuais = cfgDe(+i).sniper.alvos;
+    mudarSniper(+i, { alvos: checked ? [...new Set([...atuais, k])] : atuais.filter((x) => x !== k) });
   }
   else if (d.snmoeda) { const [i, m] = d.snmoeda.split('|'); mudarSniper(+i, { moedas: { [m]: { ...cfgDe(+i).sniper.moedas[m], on: checked } } }); }
   else if (d.snteto) { const [i, m] = d.snteto.split('|'); mudarSniper(+i, { moedas: { [m]: { ...cfgDe(+i).sniper.moedas[m], tetoDia: Math.max(0, Math.round(Number(value) || 0)) } } }); }

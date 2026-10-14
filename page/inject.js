@@ -309,12 +309,18 @@
     return Math.max(0, Math.min(qtd, Math.floor(pode / preco)));
   }
 
+  // Os alvos do sniper, pelo nome do item no catálogo do Mercado (o id muda entre servidores).
+  const SN_ALVOS = {
+    boss: /boss token/i,
+    chave: /key fragment|fragmento de chave/i,
+    bike: /bicycle fragment|fragmento de bicicleta/i,
+  };
   function snItemValido(id) {
     const c = snCfg();
     const it = S.catalog?.mercado?.catalogo?.find((x) => x.id === id);
     if (!it) return false;
-    if (Array.isArray(c.itens) && c.itens.length) return c.itens.includes(id);
-    return (c.categorias ?? []).includes(it.categoria);
+    const nome = `${it.nome || ''} ${S.items?.[id]?.name || ''}`;
+    return (c.alvos ?? []).some((k) => SN_ALVOS[k]?.test(nome));
   }
 
   let snModoAntes = null;
