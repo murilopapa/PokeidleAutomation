@@ -330,6 +330,15 @@ await ui.keyboard.press('Escape'); await sleep(300);
 const gp = await ui.evaluate(() => S.map((s) => ({ nick: s.snap?.nick, ops: opcoes(S.indexOf(s), 'item').map((o) => o.nome + '=' + o.preco).join(',') })));
 check('Golden Potion aparece na compra com o preço do servidor', gp.every((x) => /Golden Potion=4000/.test(x.ops)) && gp.every((x) => /Small Potion=50/.test(x.ops)), JSON.stringify(gp.map((x) => x.ops)));
 
+// tela cheia: a doca da Kick começa fina, mas o botão ▴ expande (e ▾ volta)
+await ui.click(`.slot[data-slot="${iK}"] [data-max="${iK}"]`); await sleep(800);
+const docaAntes = await ui.$eval('#kdock', (e) => e.classList.contains('min'));
+await ui.click('#kdock [data-kdmin]'); await sleep(600);
+const docaDepois = await ui.$eval('#kdock', (e) => e.classList.contains('min'));
+await ui.click('#kdock [data-kdmin]'); await sleep(400);
+check('tela cheia: doca da Kick fina, e o botão expande/minimiza', docaAntes === true && docaDepois === false && (await ui.$eval('#kdock', (e) => e.classList.contains('min'))) === true, JSON.stringify([docaAntes, docaDepois]));
+await ui.keyboard.press('Escape'); await sleep(600);
+
 // zoom manual do jogo pela engrenagem
 await ui.click('.slot[data-slot="1"] [data-gear="1"]'); await sleep(600);
 const z0 = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().filter((w) => w.getURL().includes('8787/app')).map((w) => w.getZoomFactor()));

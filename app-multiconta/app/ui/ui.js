@@ -338,12 +338,16 @@ function kickHTML(i) {
 // Minimizada, a doca vira uma faixa fina: os players ficam minúsculos, mas continuam na tela
 // (player escondido pausa e a Kick para de contar os pontos).
 let kdockMin = (() => { try { return localStorage.getItem('pie-kdock-min') === '1'; } catch (_) { return false; } })();
+// Na tela cheia (conta expandida ou live grande) a doca começa fina, mas o botão ▴/▾ manda nela também.
+let kdockMinTela = true;
+const telaCheia = () => foco != null || !!kkVer;
+const docaFina = () => (telaCheia() ? kdockMinTela : kdockMin);
 // Doca da Kick (embaixo): o player de cada conta que está farmando + saldo, sem abrir menu nenhum.
 function renderKickDock() {
   const d = $('#kdock');
   const contas = S.map((s, i) => i).filter((i) => KK.contas[i]?.ligado && !S[i].desligada);
   d.classList.toggle('on', contas.length > 0);
-  d.classList.toggle('min', kdockMin || foco != null || !!kkVer); // tela cheia: a doca fica fina
+  d.classList.toggle('min', docaFina());
   const html = contas.map((i) => {
     const k = KK.contas[i], jg = S[i].snap?.kick;
     const vendo = k.assistindo || [];
@@ -359,7 +363,7 @@ function renderKickDock() {
       <div class="kchips">${chips}</div>
       <button class="kd-vis ${k.visivel ? 'on' : ''}" data-kkvis="${i}" title="${k.visivel ? 'Esconder os players (continuam rodando)' : 'Mostrar os players pequenos'}">${k.visivel ? '◉' : '○'}</button></div>`;
   }).join('');
-  const botao = `<button class="kd-min" data-kdmin="1" title="${kdockMin ? 'Mostrar a doca da Kick' : 'Minimizar a doca da Kick (os players continuam rodando, bem pequenos)'}">${kdockMin ? '▴' : '▾'}</button>`;
+  const botao = `<button class="kd-min" data-kdmin="1" title="${docaFina() ? 'Mostrar a doca da Kick' : 'Minimizar a doca da Kick (os players continuam rodando, bem pequenos)'}">${docaFina() ? '▴' : '▾'}</button>`;
   const tudo = html ? botao + `<div class="kd-lista">${html}</div>` : '';
   if (d.dataset.h !== tudo) { d.innerHTML = tudo; d.dataset.h = tudo; requestAnimationFrame(enviarLayout); }
 }
@@ -926,8 +930,11 @@ async function acaoClick(d, id, campos) {
     const i = +d.kkvis;
     await app.kick.set(i, 'visivel', !KK.contas[i]?.visivel);
   } else if (d.kdmin) {
-    kdockMin = !kdockMin;
-    try { localStorage.setItem('pie-kdock-min', kdockMin ? '1' : '0'); } catch (_) { /* ok */ }
+    if (telaCheia()) kdockMinTela = !kdockMinTela;
+    else {
+      kdockMin = !kdockMin;
+      try { localStorage.setItem('pie-kdock-min', kdockMin ? '1' : '0'); } catch (_) { /* ok */ }
+    }
     renderKickDock();
   } else if (d.kkbtn != null && d.kkbtn !== undefined && d.kkbtn !== '') {
     const i = +d.kkbtn;
