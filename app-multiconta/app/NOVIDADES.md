@@ -1,3 +1,4 @@
-- Sniper do Mercado (itens): compra pedras e outros itens X% abaixo da referência = a menor entre a mediana das últimas N vendas do item e a dos N outros anúncios mais baratos da vitrine. Modo simular ou comprar, teto por dia em Coins e Gemas, reserva de Coins, categorias à escolha; uma conta por vez
+- Sniper do Mercado (itens): Boss Token, Fragmento de chave e Fragmento de bike, em Gemas e/ou Coins. Compara cada anúncio com as últimas vendas do item e com os outros anúncios da vitrine; compra (ou só simula) quando está X% abaixo. Teto de gasto por dia, entra no sorteio da liberação do anúncio só depois de liberar. Tudo começa desligado.
+- Aba Compras do sniper: histórico salvo, resumo do período (unidades, gasto, desconto médio), e por item quanto vender, o mínimo pra não ter prejuízo e o lucro já sem a taxa de 15%
 - Botões de baixo (Bola, Poção, Mapa, Sniper) com chavinha: liga/desliga sem abrir o menu
-- Conta expandida e live da Kick em tela cheia: as outras contas viram uma faixa fina (continuam rodando por trás) e a doca da Kick fica compacta
+- Conta expandida e live da Kick em tela cheia: as outras contas viram uma faixa fina (continuam rodando por trás)
