@@ -471,7 +471,19 @@ setInterval(() => {
 // fecha o app, roda o instalador sem perguntas (/S) e o instalador abre o app de novo.
 let atualizador = null;
 ipcMain.handle('att:verificar', () => atualizador.verificar());
-ipcMain.handle('att:instalar', () => { salvarTudoJa(); return atualizador.instalar(); });
+// Antes de fechar para instalar: grava no disco os cookies e o armazenamento de cada conta. O
+// login da Kick troca de token toda hora; sem isto o instalador fechava o app antes do Chromium
+// gravar o token novo e a Kick voltava deslogada.
+async function gravarSessoes() {
+  const parts = [''];
+  for (let i = 0; i < SLOTS; i++) parts.push(`persist:conta-${i + 1}`);
+  await Promise.all(parts.map(async (p) => {
+    const ses = p ? session.fromPartition(p) : session.defaultSession;
+    try { ses.flushStorageData(); } catch (_) { /* segue */ }
+    try { await ses.cookies.flushStore(); } catch (_) { /* segue */ }
+  }));
+}
+ipcMain.handle('att:instalar', async () => { salvarTudoJa(); await gravarSessoes(); return atualizador.instalar(); });
 
 // ------------------------------------------------------------------ início
 app.whenReady().then(() => {
@@ -520,5 +532,5 @@ app.whenReady().then(() => {
   // procura sozinho 20 s depois de abrir e a cada 3 h (só no app instalado, não no `npm start`)
   if (app.isPackaged) { setTimeout(() => atualizador.verificar(), 20000); setInterval(() => atualizador.verificar(), 3 * 3600 * 1000); }
 });
-app.on('before-quit', salvarTudoJa);
+app.on('before-quit', () => { salvarTudoJa(); gravarSessoes(); });
 app.on('window-all-closed', () => { twitch?.fechar(); kick?.fechar(); app.quit(); });

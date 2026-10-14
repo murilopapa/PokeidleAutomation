@@ -443,3 +443,34 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .sn-it{display:grid;grid-template-columns:minmax(0,2fr) repeat(5,minmax(0,1fr)) 46px;gap:8px;padding:3px 8px;border-top:1px solid var(--line);color:var(--mid);align-items:center}
 .sn-it span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sn-ith{border-top:0;position:sticky;top:0;background:var(--card);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
+/* Ultra eco: capturas no cartão, "Ver tudo" e os painéis de automação dentro da tela */
+.u-ver{font-size:11px;padding:2px 8px;border-radius:999px;background:transparent;color:var(--mid)}
+.u-caps{display:flex;align-items:center;gap:4px;cursor:pointer;padding:2px 0}
+.u-cap{position:relative;width:34px;height:34px;border-radius:8px;background:#121b33;border:1px solid #1d2846;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.u-cap img{width:44px;height:44px;image-rendering:pixelated}
+.u-cap.sh{border-color:#a68a1f;background:#2a2410}
+.u-cap i{position:absolute;right:2px;bottom:2px;width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.u-cap.equipe i{background:var(--ok)}.u-cap.colecao i{background:#c084fc}.u-cap.depot i{background:#60a5fa}.u-cap.fora i{background:#4b5563}
+.u-cap.fora img{opacity:.45}
+.u-mais{font-size:11.5px;color:var(--muted);margin-left:4px}
+.u-caps:hover .u-mais{color:var(--accent)}
+.u-modal{position:fixed;inset:0;z-index:40;background:#0009;display:flex;align-items:center;justify-content:center;padding:24px}
+.u-mpanel.panel{position:relative;left:auto;right:auto;bottom:auto;width:min(760px,100%);max-height:calc(100vh - 120px);overflow-y:auto;display:block}
+.u-mdet.panel{width:min(980px,100%);align-self:center}
+.u-dres{font-size:12.5px;color:var(--mid);margin:8px 0}
+.u-dsec{font-size:12px;font-weight:700;color:var(--fg);margin:12px 0 6px}
+.u-dsec small{font-weight:500;color:var(--muted)}
+.u-dcols{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px}
+.u-tab{width:100%;border-collapse:collapse;font-size:12.5px}
+.u-tab th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;padding:4px 6px;border-bottom:1px solid var(--line)}
+.u-tab td{padding:4px 6px;border-bottom:1px solid #151d33}
+.u-tab .n{text-align:right;white-space:nowrap}
+.u-tab tr.sh td{color:#f9e27d}
+.u-mini{width:34px;padding:0!important}
+.u-mini img{width:34px;height:34px;image-rendering:pixelated;display:block}
+.u-filtros{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.u-filtros button{font-size:12px;padding:3px 10px;border-radius:999px;background:transparent;color:var(--muted)}
+.u-filtros button.on{color:var(--fg);border-color:var(--accent)}
+.u-filtros b{color:var(--fg)}
+.u-onde{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mid);white-space:nowrap}
+.u-onde.equipe{color:var(--ok);border-color:#1f5c45}.u-onde.colecao{color:#d8b4fe;border-color:#5b3a86}.u-onde.depot{color:#93c5fd;border-color:#274a7a}.u-onde.fora{color:#6b7280}

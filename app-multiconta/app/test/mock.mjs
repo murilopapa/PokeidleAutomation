@@ -26,7 +26,14 @@ const GAME_HTML = `<!doctype html><html><head><title>Poke Idle IO — MMO</title
   const sessaoFalsa = (nick) => localStorage.setItem('sessao-hunt:' + nick, JSON.stringify(nick === 'murilo'
     ? { ms: 11520000, xpTreinador: 9e6, xpPokemon: 2.8e8, gold: 1310000, abates: 5840, capturas: 31, shiniesVistos: 1, shinies: 0, bossTokens: 1, fragChave: 2, fragBicicleta: 1, bolas: { 1: 40 }, pocoes: { 201: 12 } }
     : { ms: 3900000, gold: 220000, abates: 1020, capturas: 12, shiniesVistos: 1, shinies: 1, bolas: {}, pocoes: {} }));
-  ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.t === 'welcome' && m.estado?.nick) sessaoFalsa(m.estado.nick); if (m.estado?.nick) document.getElementById('nick').textContent = m.estado.nick; if (m.estado?.huntSlug) document.getElementById('hunt').textContent = m.estado.huntSlug; };
+  // o histórico de capturas que o jogo grava (capturas-hist:<nick>)
+  const capturasFalsas = (nick) => localStorage.setItem('capturas-hist:' + nick, JSON.stringify([
+    { em: Date.now() - 60000, id: 14, nome: 'Abra', level: 30, shiny: false, speciesId: 63, quality: 1.2, ivs: { hp: 10, atk: 10 } },
+    { em: Date.now() - 120000, id: 13, nome: 'Zubat', level: 20, shiny: true, speciesId: 41, quality: 0.9, ivs: { hp: 30, atk: 31 } },
+    { em: Date.now() - 180000, id: 12, nome: 'Pikachu', level: 40, shiny: false, speciesId: 25, quality: 0.95 },
+    { em: Date.now() - 240000, id: 99, nome: 'Rattata', level: 5, shiny: false, speciesId: 19, quality: 0.5 },
+  ]));
+  ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.t === 'welcome' && m.estado?.nick) { sessaoFalsa(m.estado.nick); capturasFalsas(m.estado.nick); } if (m.estado?.nick) document.getElementById('nick').textContent = m.estado.nick; if (m.estado?.huntSlug) document.getElementById('hunt').textContent = m.estado.huntSlug; };
 </script></body></html>`;
 
 let contas = 0;
@@ -38,7 +45,7 @@ function estadoCheio(n) {
     loja: { vipAte: n % 4 === 0 ? Date.now() + 864e5 : 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 1000,
     huntSlug: n % 4 === 3 ? null : n % 4 === 1 ? 'tangela' : 'kadabra', noCentro: n % 4 === 3, activeId: 11,
     balls: { 1: 48, 2: 5 }, items: { 200: 30, 201: 4 },
-    automation: { autoPotion: true, autoBall: true, ballIds: [1], potionIds: n % 4 === 1 ? [201, 90001] : [201] },
+    automation: { pokemonTravado: [14], autoPotion: true, autoBall: true, ballIds: n % 4 === 0 ? [1, 2] : [1], potionIds: n % 4 === 1 ? [201, 90001] : [201] },
     twitch: {
       login: n === 0 ? 'murilo_tv' : null, aoVivo: true, assistindo: false, pct: 15, pctAtual: 0, extra: 2.5, assistindoEm: [],
       oficiais: [{ login: 'faasii', nome: 'faasii', bonus: true }, { login: 'parceiro1', nome: 'Parceiro 1', bonus: true }, { login: 'parceiro2', bonus: false }],
@@ -53,6 +60,8 @@ function estadoCheio(n) {
     pokemons: [
       { id: 11, nome: 'Yanma', speciesId: 193, level: 56 + n * 10, hp: 900, maxHp: 972, slot: 0, potencia: 1, quality: 1.717, ivs: { hp: 11, atk: 24, def: 25, spAtk: 32, spDef: 8, speed: 16 }, tipos: ['BUG', 'FLYING'],
         stats: { hp: 81 + n * 12, atk: 120 + n * 20, def: 70 + n * 10, spAtk: 140 + n * 25, spDef: 60 + n * 8, speed: 130 + n * 15 } },
+      { id: 13, nome: 'Zubat', speciesId: 41, level: 20, hp: 50, maxHp: 50, slot: null, shiny: true, stats: { hp: 10, atk: 10, def: 10, spAtk: 10, spDef: 10, speed: 10 } },
+      { id: 14, nome: 'Abra', speciesId: 63, level: 30, hp: 50, maxHp: 50, slot: null, stats: { hp: 10, atk: 10, def: 10, spAtk: 10, spDef: 10, speed: 10 } },
       { id: 12, nome: 'Pikachu', speciesId: 25, level: 40, hp: 30, maxHp: 140, slot: 1, potencia: 1, quality: 0.95, ivs: { hp: 5, atk: 8, def: 9, spAtk: 12, spDef: 4, speed: 30 }, stats: { hp: 12, atk: 30, def: 20, spAtk: 30, spDef: 25, speed: 50 } },
     ],
   };
@@ -138,7 +147,7 @@ wssJogo.on('connection', (ws) => {
   if (e.huntSlug && !e.noCentro) {
     setTimeout(() => ws.send(JSON.stringify({ t: 'batalha', ev: [
       { k: 'capturado', pokemon: { nome: n % 4 === 1 ? 'Zubat' : 'Ditto', level: n % 4 === 1 ? 33 : 50, shiny: n % 4 === 1 } },
-      { k: 'morte', quem: 'selvagem', nome: 'Kadabra', xp: 10, ouro: 5, drops: [{ itemId: 70011, nome: 'Key Fragment', qtd: 1 }, { itemId: 1, nome: 'Twisted Spoon', qtd: 1 }] },
+      { k: 'morte', quem: 'selvagem', nome: 'Kadabra', xp: 10, ouro: 5, drops: [{ itemId: 70011, nome: 'Key Fragment', qtd: 1 }, { itemId: 1, nome: 'Twisted Spoon', qtd: 2 }], vendaAuto: [{ nome: 'Twisted Spoon' }] },
       ...(n % 4 === 1 ? [{ k: 'morte', quem: 'jogador' }] : []),
     ] })), 2500);
   }

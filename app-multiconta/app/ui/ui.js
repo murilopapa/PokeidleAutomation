@@ -782,6 +782,8 @@ const ACHADOS = [
   ['fragMega', 'Frag. mega'], ['fragMegaShiny', 'Frag. mega shiny'], ['tmPeca', 'Peça de TM'], ['tmPecaAoe', 'Peça de TM AoE'],
   ['ticketMistico', 'Mystic Ticket'], ['ticketSafari', 'Safari Ticket'], ['fragOvoShiny', 'Frag. ovo shiny'],
 ];
+const ONDE = { equipe: 'na equipe', colecao: 'na Coleção', depot: 'no Depot', chegando: 'chegando', fora: 'saiu da conta' };
+let uDet = null;          // Ultra eco: "Ver tudo" aberto { i, aba: 'capturas'|'itens', filtro }
 const ICONE_FEED = { captura: '●', shiny: '✨', drop: '◆', boss: '♛', desmaio: '✖' };
 const tempoCurto = (ms) => { const m = Math.floor(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`; };
 const horaCurta = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -797,18 +799,21 @@ function barraHp(p, grande) {
   const cor = pct > 50 ? 'ok' : pct > 20 ? 'warn' : 'bad';
   return `<div class="u-hp ${grande ? 'g' : ''} ${cor}" title="${num(hp)} / ${num(max)} HP"><i style="width:${pct.toFixed(1)}%"></i></div>`;
 }
-// O que a conta usa de bola e de poção: o que o automático do jogo usa; se não tiver, o da nossa regra.
-function consumivel(i, kind) {
+// O que a conta usa de bola e de poção: as que você escolheu no automático do jogo (todas, na
+// ordem dele); sem nenhuma lá, a da nossa regra de compra.
+function consumiveis(i, kind) {
   const s = S[i], snap = s.snap, cat = s.catalog;
   const ga = snap?.gameAuto || {};
   const rid = kind === 'ball' ? ID_BOLA : ID_POCAO;
-  const id = (kind === 'ball' ? ga.ballIds?.[0] : ga.potionIds?.[0]) ?? regra(i, rid)?.refId ?? null;
-  if (id == null) return null;
-  const nome = kind === 'ball' ? (cat?.bolas?.find((b) => b.id === Number(id))?.nome || 'Bola') : (cat?.items?.[id]?.name || 'Poção');
-  const q = estoque(i, kind, id) ?? 0;
   const r = regra(i, rid);
-  const pouco = q < Math.max(1, r?.enabled ? r.min : kind === 'ball' ? 50 : 20);
-  return { nome, q, pouco };
+  let ids = (kind === 'ball' ? ga.ballIds : ga.potionIds) || [];
+  if (!ids.length && r?.refId != null) ids = [r.refId];
+  return ids.map((id) => {
+    const nome = kind === 'ball' ? (cat?.bolas?.find((b) => b.id === Number(id))?.nome || `Bola ${id}`) : (cat?.items?.[id]?.name || `Item ${id}`);
+    const q = estoque(i, kind, id) ?? 0;
+    const pouco = q < Math.max(1, r?.enabled && Number(r.refId) === Number(id) ? r.min : kind === 'ball' ? 50 : 20);
+    return { id, nome, q, pouco };
+  });
 }
 function ultraDados(i) {
   const s = S[i], snap = s.snap;
@@ -837,7 +842,8 @@ function ultraDados(i) {
     xp: xphReal(i), xpEst: xphReal(i) == null ? S[i].rAtual?.xpH ?? null : null,
     ouroH: sesH && ses.gold ? Math.round(ses.gold * sesH) : null,
     abH: snap.xpMedido?.kph ?? (sesH && ses.abates ? Math.round(ses.abates * sesH) : null),
-    bola: consumivel(i, 'ball'), poc: consumivel(i, 'item'),
+    bolas: consumiveis(i, 'ball'), pocs: consumiveis(i, 'item'),
+    capturas: snap.capturas || [],
     achados: ses ? ACHADOS.filter(([k]) => ses[k] > 0).map(([k, n]) => [n, ses[k]]) : [],
     feed: (snap.feed || []).slice(-3).reverse(),
     desmaiosH: snap.desmaiosH || 0,
@@ -845,16 +851,17 @@ function ultraDados(i) {
 }
 function cartaoUltra(d) {
   const i = d.i, c = cfgDe(i), snap = S[i].snap;
-  const sw = (k, nome, on) => `<button class="u-sw ${on ? 'on' : ''}" data-amt="${i}|${k}" title="${on ? 'Desligar' : 'Ligar'} ${nome.toLowerCase()}"><i></i>${nome}</button>`;
+  const sw = (k, nome, on) => `<button class="u-sw ${on ? 'on' : ''}" data-am="${i}|${k}" title="Abrir ${nome.toLowerCase()}"><i data-amt="${i}|${k}" title="${on ? 'Desligar' : 'Ligar'} sem abrir"></i>${nome}</button>`;
   const chaves = `<div class="u-sws"><label class="sw u-master" title="Chave geral desta conta"><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span><span>Automação</span></label>`
     + `<span class="u-swg ${c.enabled ? '' : 'desl'}">${sw('bola', 'Bola', regra(i, ID_BOLA)?.enabled)}${sw('poc', 'Poção', regra(i, ID_POCAO)?.enabled)}${sw('mapa', 'Mapa', c.autoHunt?.enabled)}${sw('sniper', 'Sniper', c.sniper?.enabled)}</span></div>`;
   if (d.carregando) return `<div class="u-cab2"><span class="dot"></span><b>${nomeConta(i)}</b><span class="u-st">carregando o jogo…</span></div>${chaves}`;
   const pk = d.pk, ses = d.ses;
   const outros = d.team.filter((p) => p !== pk);
   const num2 = (v, est) => (v == null ? '—' : (est ? '≈ ' : '') + curto(v));
-  const cons = (x, tipo) => (x ? `<span class="u-cons ${tipo} ${x.pouco ? 'pouco' : ''}" title="${x.pouco ? 'Está acabando' : 'Em uso'}"><i></i><b>${num(x.q)}</b> ${esc(x.nome)}</span>` : '');
+  const cons = (lista, tipo) => lista.map((x) => `<span class="u-cons ${tipo} ${x.pouco ? 'pouco' : ''}" title="${x.pouco ? 'Está acabando' : 'Escolhida para usar'}"><i></i><b>${num(x.q)}</b> ${esc(x.nome)}</span>`).join('');
+  const caps = d.capturas.slice(0, 7);
   return `<div class="u-cab2"><span class="dot ${d.cls === 'ok' ? 'hunt' : d.cls === 'bad' ? 'bad' : 'fight'}"></span><b>${nomeConta(i)}</b><small>Nv ${num(snap.level)}</small>`
-    + `${d.bonus.map((x) => `<span class="u-bn">${esc(x)}</span>`).join('')}<span class="sp"></span><span class="u-st ${d.cls}">${esc(d.st)}</span></div>`
+    + `${d.bonus.map((x) => `<span class="u-bn">${esc(x)}</span>`).join('')}<span class="sp"></span><span class="u-st ${d.cls}">${esc(d.st)}</span><button class="u-ver" data-udet="${i}|capturas" title="Capturas, itens e gastos desta conta">Ver tudo</button></div>`
     + `<div class="u-pkb"><div class="u-ret">${retratoPk(pk)}</div><div class="u-pki">`
     + `<div class="u-pkn">${pk ? `${pk.shiny ? '✨ ' : ''}<b>${esc(pk.nome)}</b> <small>Nv ${num(pk.level)}</small>` : '<small>sem pokémon ativo</small>'}</div>`
     + barraHp(pk, true)
@@ -864,12 +871,58 @@ function cartaoUltra(d) {
     + `<div class="u-nums"><div><small>XP/h${d.xp == null && d.xpEst != null ? ' (estim.)' : ''}</small><b class="xp">${num2(d.xp ?? d.xpEst, d.xp == null && d.xpEst != null)}</b></div>`
     + `<div><small>Ouro/h</small><b class="ouro">${num2(d.ouroH)}</b></div><div><small>Abates/h</small><b>${num2(d.abH)}</b></div></div>`
     + `<div class="u-sal"><span>Ouro <b>${curto(snap.gold)}</b></span><span>Gemas <b>${num(snap.orbs)}</b></span>${snap.diamonds ? `<span>Diamantes <b>${num(snap.diamonds)}</b></span>` : ''}</div>`
-    + `<div class="u-sal">${cons(d.bola, 'bola')}${cons(d.poc, 'poc')}</div>`
+    + `<div class="u-sal">${cons(d.bolas, 'bola') || '<span>nenhuma bola escolhida</span>'}</div><div class="u-sal">${cons(d.pocs, 'poc') || '<span>nenhuma poção escolhida</span>'}</div>`
     + (ses ? `<div class="u-ses"><span>Sessão <b>${tempoCurto(ses.ms)}</b></span><span><b>${num(ses.abates)}</b> abates</span><span><b>${num(ses.capturas)}</b> capturas</span>${ses.shinies || ses.shiniesVistos ? `<span class="sh">✨ <b>${ses.shinies}</b>/${ses.shiniesVistos} shiny</span>` : ''}${d.desmaiosH ? `<span class="bad"><b>${d.desmaiosH}</b> desmaio${d.desmaiosH > 1 ? 's' : ''} na última hora</span>` : ''}</div>` : '')
     + (d.achados.length ? `<div class="u-ach">${d.achados.map(([n, q]) => `<span>${esc(n)} <b>×${num(q)}</b></span>`).join('')}</div>` : '')
+    + (caps.length ? `<div class="u-caps" data-udet="${i}|capturas" title="Ver todas as capturas">${caps.map((p) => `<span class="u-cap ${p.shiny ? 'sh' : ''} ${p.onde}" title="${esc(p.nome)} Nv ${num(p.level)} · ${ONDE[p.onde]}">${retratoPk(p)}<i></i></span>`).join('')}<span class="u-mais">ver tudo ›</span></div>` : '')
     + (d.feed.length ? `<div class="u-feed">${d.feed.map((f) => `<div class="${f.tipo}"><small>${horaCurta(f.t)}</small> ${ICONE_FEED[f.tipo] || '·'} ${esc(f.texto)}</div>`).join('')}</div>` : '')
     + chaves;
 }
+
+function detalheHTML(i, aba, filtro) {
+  const s = S[i], snap = s.snap || {}, ses = snap.sessao, cat = s.catalog;
+  const caps = snap.capturas || [];
+  const conta = (o) => caps.filter((c) => c.onde === o).length;
+  const abas = `<div class="sn-abas"><button class="${aba === 'capturas' ? 'on' : ''}" data-udet="${i}|capturas">Capturas <b>${caps.length}</b></button><button class="${aba === 'itens' ? 'on' : ''}" data-udet="${i}|itens">Itens e gastos</button></div>`;
+  const cab = `<div class="ph2"><span>${nomeConta(i)} · tudo da sessão</span><button class="ib" data-ufechar="1" title="Fechar (Esc)">${ICON.x}</button></div>${abas}`;
+  if (aba === 'itens') {
+    const nomeBola = (id) => cat?.bolas?.find((b) => b.id === Number(id))?.nome || `Bola ${id}`;
+    const nomeItem = (id) => cat?.items?.[id]?.name || `Item ${id}`;
+    const gasto = (m, nome) => Object.entries(m || {}).filter(([, q]) => q > 0).map(([id, q]) => `<tr><td>${esc(nome(id))}</td><td class="n">${num(q)}</td></tr>`).join('');
+    const itens = ses?.itens || [];
+    const raros = ses ? ACHADOS.filter(([k]) => ses[k] > 0) : [];
+    return cab + (ses ? `<div class="u-dres">Sessão de <b>${tempoCurto(ses.ms)}</b> · <b>${num(ses.abates)}</b> abates · <b>${curto(ses.gold)}</b> de ouro · <b>${num(ses.capturas)}</b> capturas</div>` : '<div class="vazio-top">O jogo ainda não gravou a sessão desta conta.</div>')
+      + (raros.length ? `<div class="u-dsec">Achados raros</div><div class="u-ach">${raros.map(([k, n]) => `<span>${esc(n)} <b>×${num(ses[k])}</b></span>`).join('')}</div>` : '')
+      + `<div class="u-dcols"><div><div class="u-dsec">Itens que caíram <small>(${itens.length ? 'desde que o app abriu a conta, zera com a sessão' : 'nenhum ainda'})</small></div>`
+      + (itens.length ? `<table class="u-tab"><tr><th>Item</th><th class="n">Qtd</th><th class="n">Vendido auto.</th></tr>${itens.map((x) => `<tr><td>${esc(x.nome)}</td><td class="n">${num(x.qtd)}</td><td class="n">${x.auto ? num(x.auto) : '—'}</td></tr>`).join('')}</table>` : '')
+      + `</div><div><div class="u-dsec">Gastos na sessão</div>`
+      + (ses && (gasto(ses.bolas, nomeBola) || gasto(ses.pocoes, nomeItem)) ? `<table class="u-tab"><tr><th>Usado</th><th class="n">Qtd</th></tr>${gasto(ses.bolas, nomeBola)}${gasto(ses.pocoes, nomeItem)}</table>` : '<div class="hint">Nada gasto ainda.</div>')
+      + `</div></div>`;
+  }
+  const fs = [['todos', 'Todas', caps.length], ['shiny', '✨ Shiny', caps.filter((c) => c.shiny).length], ['equipe', 'Equipe', conta('equipe')], ['colecao', 'Coleção', conta('colecao')], ['depot', 'Depot', conta('depot')], ['fora', 'Saíram', conta('fora')]];
+  const f = filtro || 'todos';
+  const lista = caps.filter((c) => f === 'todos' || (f === 'shiny' ? c.shiny : c.onde === f));
+  return cab + `<div class="u-filtros">${fs.map(([k, n, q]) => `<button class="${f === k ? 'on' : ''}" data-ufil="${k}">${n} <b>${q}</b></button>`).join('')}</div>`
+    + (lista.length ? `<table class="u-tab u-captab"><tr><th></th><th>Pokémon</th><th class="n">Nv</th><th class="n">Qualidade</th><th class="n">IV</th><th>Onde está</th><th class="n">Hora</th></tr>`
+      + lista.map((c) => `<tr class="${c.shiny ? 'sh' : ''}"><td class="u-mini">${retratoPk(c)}</td><td>${c.shiny ? '✨ ' : ''}${esc(c.nome)}</td><td class="n">${num(c.level)}</td><td class="n">${c.quality != null ? n1(c.quality) : '—'}</td><td class="n">${c.iv != null ? num(c.iv) : '—'}</td><td><span class="u-onde ${c.onde}">${ONDE[c.onde] || c.onde}</span></td><td class="n">${c.em ? new Date(c.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</td></tr>`).join('') + '</table>'
+      : `<div class="vazio-top">${caps.length ? 'Nenhuma captura neste filtro.' : 'Nenhuma captura guardada pelo jogo nesta conta ainda.'}</div>`)
+    + '<div class="hint">As últimas 100 capturas, como o jogo guarda no histórico dele. "Saíram" = vendidas, oferendadas ou anunciadas.</div>';
+}
+// A janela por cima dos cartões: o painel de uma automação (o mesmo do modo normal) ou o "Ver tudo".
+let uModalPend = false;
+function renderUltraModal(el) {
+  let box = el.querySelector('.u-modal');
+  const conteudo = painel ? `<div class="panel on u-mpanel" data-ovbox>${painelHTML(painel.i, painel.k)}</div>`
+    : uDet && S[uDet.i] && !S[uDet.i].desligada ? `<div class="panel on u-mpanel u-mdet" data-ovbox>${detalheHTML(uDet.i, uDet.aba, uDet.filtro)}</div>` : '';
+  if (!conteudo) { if (box) box.remove(); return; }
+  if (!box) { box = document.createElement('div'); box.className = 'u-modal'; el.appendChild(box); box.dataset.h = ''; }
+  // não redesenha enquanto você digita num campo
+  const ativo = document.activeElement;
+  if (ativo && box.contains(ativo) && ativo.matches('input,select')) { uModalPend = true; return; }
+  uModalPend = false;
+  if (box.dataset.h !== conteudo) { const rolagem = box.firstElementChild?.scrollTop || 0; box.innerHTML = conteudo; box.dataset.h = conteudo; if (box.firstElementChild) box.firstElementChild.scrollTop = rolagem; }
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (uModalPend && MODO === 'ultra') renderUltra(); }, 0));
 function renderUltra() {
   const el = $('#ultra');
   const on = MODO === 'ultra';
@@ -902,6 +955,7 @@ function renderUltra() {
     const h = cartaoUltra(d);
     if (box.dataset.h !== h) { box.innerHTML = h; box.dataset.h = h; }
   }
+  renderUltraModal(el);
 }
 // Botão da versão: só diz se tem atualização ou não (sem "procurando").
 function renderAtt() {
@@ -975,6 +1029,11 @@ function ovAberto() {
 }
 let ovUltimo = '';
 function ovSync() {
+  if (MODO === 'ultra') {
+    if (ovUltimo !== 'null') { ovUltimo = 'null'; app.overlay(null); }
+    renderUltra();
+    return;
+  }
   const o = ovAberto();
   const msg = o ? { slot: o.i, kind: o.kind, html: o.html() } : null;
   const k = JSON.stringify(msg);
@@ -983,6 +1042,7 @@ function ovSync() {
   app.overlay(msg);
 }
 function abrir(estado) {
+  if (estado.painel) uDet = null;
   painel = estado.painel !== undefined ? estado.painel : painel;
   menu = estado.menu !== undefined ? estado.menu : menu;
   twHover = estado.twHover !== undefined ? estado.twHover : twHover;
@@ -992,10 +1052,15 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-sntab],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-udet],[data-ufil],[data-ufechar],[data-sntab],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
-  if (!t) { if (menu != null || painel) abrir({ menu: null, painel: null }); return; }
+  if (!t) {
+    if (e.target.closest('[data-ovbox]')) return;           // dentro da janela do Ultra eco
+    if (uDet && e.target.closest('.u-modal')) { uDet = null; renderUltra(); return; }
+    if (menu != null || painel) abrir({ menu: null, painel: null });
+    return;
+  }
   acaoClick({ ...t.dataset }, t.id, {});
 });
 async function acaoClick(d, id, campos) {
@@ -1066,6 +1131,15 @@ async function acaoClick(d, id, campos) {
     if (!ligada) { S[i].res = null; S[i].top = []; S[i].alerta = null; if (foco === i) foco = null; }
     renderTudo();
     toast(ligada ? 'Conta ligada' : 'Conta desligada: jogo fechado, RAM liberada');
+  } else if (d.udet) {
+    const [i, aba] = d.udet.split('|');
+    painel = null; menu = null; twHover = null;
+    uDet = { i: +i, aba, filtro: uDet?.i === +i ? uDet.filtro : null };
+    renderUltra();
+  } else if (d.ufil) {
+    if (uDet) { uDet.filtro = d.ufil; renderUltra(); }
+  } else if (d.ufechar) {
+    uDet = null; renderUltra();
   } else if (d.sntab) {
     snAba = d.sntab === 'compras' ? 'compras' : 'config';
     ovSync();
@@ -1172,7 +1246,8 @@ function acaoChange(d, value, checked) {
 document.addEventListener('keydown', (e) => {
   if (e.target.matches('input,select')) { if (e.key === 'Enter') e.target.blur(); return; }
   if (e.key === 'Escape') {
-    if (painel || menu != null || twHover != null) fecharTudo();
+    if (uDet) { uDet = null; renderUltra(); }
+    else if (painel || menu != null || twHover != null) fecharTudo();
     else if (kkVer) { kkVer = null; renderTudo(); }
     else if (foco != null) { foco = null; renderTudo(); }
   }

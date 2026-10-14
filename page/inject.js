@@ -756,11 +756,53 @@
       feedAdd('boss', `boss derrotado${ev.nome ? ': ' + ev.nome : ''}`);
     }
     if ((ev.k === 'morte' && ev.quem === 'selvagem') || ev.k === 'bossMorto') {
+      somarItens(ev);
       for (const d of Array.isArray(ev.drops) ? ev.drops : []) {
         if (DROPS_RAROS.has(Number(d?.itemId)) || RARO_RE.test(String(d?.nome ?? ''))) feedAdd('drop', `${d.nome ?? 'item ' + d.itemId} ×${Number(d.qtd) || 1}`);
       }
     }
   }
+  // Todos os itens que caíram na sessão (o jogo só conta os raros). Zera junto com a sessão do
+  // jogo: quando os abates da prancheta dele voltam para trás, alguém apertou Reset.
+  const ITENS_CHAVE = 'pie-itens-sessao';
+  let itensSes = (() => { try { const v = JSON.parse(localStorage.getItem(ITENS_CHAVE)); return v && typeof v.itens === 'object' ? v : null; } catch (_) { return null; } })() || { abates: 0, itens: {} };
+  let itensGravar = null;
+  function somarItens(ev) {
+    const auto = new Set((Array.isArray(ev.vendaAuto) ? ev.vendaAuto : []).map((x) => x?.nome));
+    for (const d of Array.isArray(ev.drops) ? ev.drops : []) {
+      const nome = String(d?.nome ?? (d?.itemId != null ? 'item ' + d.itemId : '')).slice(0, 50);
+      if (!nome) continue;
+      const it = (itensSes.itens[nome] ??= { id: Number(d.itemId) || null, qtd: 0, auto: 0 });
+      const q = Number(d.qtd) || 1;
+      it.qtd += q;
+      if (auto.has(d.nome)) it.auto += q;
+    }
+    if (!itensGravar) itensGravar = setTimeout(() => { itensGravar = null; try { localStorage.setItem(ITENS_CHAVE, JSON.stringify(itensSes)); } catch (_) { /* segue */ } }, 3000);
+  }
+  function itensDaSessao(ses) {
+    if (ses && ses.abates < itensSes.abates) { itensSes = { abates: 0, itens: {} }; try { localStorage.setItem(ITENS_CHAVE, JSON.stringify(itensSes)); } catch (_) { /* segue */ } }
+    if (ses) itensSes.abates = ses.abates;
+    return Object.entries(itensSes.itens).map(([nome, v]) => ({ nome, ...v })).sort((a, b) => b.qtd - a.qtd).slice(0, 80);
+  }
+  // O histórico de capturas do jogo (as últimas 100, gravadas por ele) e onde cada uma está agora:
+  // na equipe, na Coleção, no Depot, ou fora da conta (vendida, oferendada, anunciada).
+  function capturasDoJogo(e) {
+    if (!e?.nick) return [];
+    let hist;
+    try { hist = JSON.parse(localStorage.getItem('capturas-hist:' + String(e.nick).toLowerCase())); } catch (_) { return []; }
+    if (!Array.isArray(hist)) return [];
+    const meus = new Map((e.pokemons ?? []).map((p) => [Number(p.id), p]));
+    const colecao = new Set((e.automation?.pokemonTravado ?? []).map(Number));
+    const agora = Date.now();
+    return hist.slice(0, 100).map((c) => {
+      const id = c?.id != null ? Number(c.id) : null;
+      const vivo = id != null ? meus.get(id) : null;
+      const onde = vivo ? (vivo.slot != null ? 'equipe' : colecao.has(id) ? 'colecao' : 'depot') : agora - (Number(c?.em) || 0) < 15000 ? 'chegando' : 'fora';
+      const ivs = c?.ivs && typeof c.ivs === 'object' ? Object.values(c.ivs).reduce((t, v) => t + (Number(v) || 0), 0) : null;
+      return { em: Number(c?.em) || 0, id, nome: String(c?.nome ?? '—').slice(0, 40), level: Number(c?.level) || 0, shiny: !!c?.shiny, speciesId: c?.speciesId ?? null, quality: c?.quality ?? null, iv: ivs, onde };
+    });
+  }
+
   // A prancheta de sessão do próprio jogo (o painel "Sessão"): ele grava no navegador da conta.
   const SESSAO_CAMPOS = ['xpTreinador', 'xpPokemon', 'gold', 'abates', 'capturas', 'shiniesVistos', 'shinies',
     'bossTokens', 'fragChave', 'fragShiny', 'fragBicicleta', 'fragMega', 'fragMegaShiny', 'tmPeca', 'tmPecaAoe',
@@ -834,7 +876,8 @@
         autoVoltarHunt: !!a.autoVoltarHunt,
       },
       uso: ritmos(),
-      sessao: sessaoDoJogo(e.nick),
+      sessao: (() => { const ses = sessaoDoJogo(e.nick); if (ses) ses.itens = itensDaSessao(ses); return ses; })(),
+      capturas: capturasDoJogo(e),
       feed: feed.slice(-6),
       desmaiosH: desmaios.filter((t) => t > Date.now() - 3600000).length,
       ultimoCombate: S.ultimoCombate ?? null,
