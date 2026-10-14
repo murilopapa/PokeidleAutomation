@@ -1,2 +1,1 @@
-- Cabeçalho diz se o XP/h é o real (medido agora) ou estimado (≈)
-- Mapa: o top 3 mostra o XP/h real da hunt atual ao lado da estimativa, a % de risco explicada ("golpe tira 19% do HP") e o bônus de XP real que o jogo está dando
+- Sniper do Mercado (itens): compra pedras e outros itens quando aparecem X% abaixo do preço médio vendido nos últimos 7 dias. Modo simular (só anota) ou comprar, teto de gasto por dia em Coins e em Gemas, reserva de Coins, categorias à escolha; uma conta por vez

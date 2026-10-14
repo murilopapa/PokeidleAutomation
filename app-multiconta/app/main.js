@@ -400,7 +400,7 @@ ipcMain.on('jogo:store-set', (e, itens) => {
   if (itens.snapshot?.nick && itens.snapshot.nick !== store[i].nick) { store[i].nick = itens.snapshot.nick; salvar(i); }
   if (PERSISTE.some((k) => k in itens)) salvar(i);
   const paraUi = {};
-  for (const k of ['snapshot', 'catalog', 'medidas', 'cfg', 'geo']) if (k in itens) paraUi[k] = itens[k];
+  for (const k of ['snapshot', 'catalog', 'medidas', 'cfg', 'geo', 'sniper']) if (k in itens) paraUi[k] = itens[k];
   if (Object.keys(paraUi).length) ui('slot:dados', i, paraUi);
   if (itens.snapshot) { twitch.snapshot(i, itens.snapshot); kick.snapshot(i, itens.snapshot); }
 });

@@ -15,6 +15,8 @@ window.__PIE_PROTO = {
     estado: 'estado',   // { estado (delta) }
     batalha: 'batalha', // { ev: [{ k: 'ataque' | 'hunt' (trocaLivreEm) | ... }] }
     campoInit: 'campo.init', // { slug, heroi: {c, r}, mobs: [...], centro, pvp, casa } — entrada num mapa
+    mercado: 'market',       // { aba: 'itens' (resumo, medias) | 'item' (itemId, moeda, linhas) | ... }
+    erro: 'erro',            // { chave: 'market.sorteio' | 'market.sorteioPerdeu' | ..., msg }
     campo: 'campo',          // { heroi, mobs: [{ s slot, c, r, x morto }], fora: [slots] }
   },
 
@@ -23,5 +25,9 @@ window.__PIE_PROTO = {
     buyItem: (id, qty) => ({ t: 'shop.buy', kind: 'item', id, qty }),
     buyBall: (id, qty) => ({ t: 'shop.buy', kind: 'ball', id, qty }),
     selectHunt: (slug) => ({ t: 'hunt.select', slug }),
+    // Mercado da Comunidade (as mesmas mensagens da tela do Mercado)
+    mercadoItens: () => ({ t: 'market.itens', elemento: '', categoria: '' }),
+    mercadoItem: (itemId, moeda) => ({ t: 'market.item', itemId, moeda }),
+    mercadoComprar: (id, qtd, preco, moeda) => ({ t: 'market.comprar', id, qtd, preco, moeda }),
   },
 };

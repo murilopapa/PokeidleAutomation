@@ -391,6 +391,7 @@ function barHTML(i) {
     ${chip('bola', 'Bola', bola?.enabled, `${esc(nomeCurto(bola))} &lt; ${num(bola?.min ?? 0)}`)}
     ${chip('poc', 'Poção', poc?.enabled, `${esc(nomeCurto(poc))} &lt; ${num(poc?.min ?? 0)}`)}
     ${chip('mapa', 'Mapa', c.autoHunt?.enabled, 'top 1')}
+    ${chip('sniper', 'Sniper', c.sniper?.enabled, c.sniper?.modo === 'comprar' ? `−${c.sniper.desconto}% comprando` : `−${c.sniper?.desconto}% simulando`)}
     <span class="sp"></span>
     <label class="sw master-c" title="Chave geral desta conta: sem ela nada age no jogo"><span>Automação</span><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span></label>`;
 }
@@ -400,6 +401,7 @@ function painelHTML(i, k) {
   const sw = (attr, on) => `<label class="sw" style="gap:12px"><span>Ligado</span><input type="checkbox" ${attr} ${on ? 'checked' : ''}><span class="tg"></span></label>`;
   const fechar = `<button class="ib" data-fechar="1" title="Fechar">${ICON.x}</button>`;
   if (k === 'mapa') return mapaHTML(i, sw, fechar);
+  if (k === 'sniper') return sniperHTML(i, sw, fechar);
   const kind = k === 'bola' ? 'ball' : 'item';
   const id = k === 'bola' ? ID_BOLA : ID_POCAO;
   const r = regra(i, id) || { min: 100, qty: 100, enabled: false, refId: null };
@@ -416,6 +418,48 @@ function painelHTML(i, k) {
     <div class="res">Quando ficar abaixo de <b>${num(r.min)}</b>, compra <b>${num(r.qty)}</b>.${tem != null ? ` Agora: <b>${num(tem)}</b>.` : ''}</div>
     ${bloq && bloq > Date.now() ? '<div class="res bad">A última compra não confirmou; pausada por alguns minutos.</div>' : ''}
     ${!cfgDe(i).enabled ? '<div class="hint">A chave "Automação" desta conta está desligada: nada é comprado até ligar.</div>' : ''}</div>`;
+}
+
+
+// ---- Sniper do Mercado (itens)
+const CAT_MERCADO = { stone: 'Pedras', mega: 'Mega Stones', loot: 'Drops', fragment: 'Fragmentos', tm: 'TMs', card: 'Cartas', boss: 'Boss Tokens', ticket: 'Tickets', clan: 'Clã', ovo: 'Ovo Shiny', box: 'Boxes', bicicleta: 'Bicicletas', casa: 'Casas', skin: 'Skins', beast: 'Beast Ball' };
+const SN_COR = { comprou: 'ok', perdeu: 'bad', erro: 'bad', simulado: 'sim', agendado: 'ag', enviado: 'ag', sorteio: 'ag', pulado: '', info: '' };
+const hora = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function sniperHTML(i, sw, fechar) {
+  const c = cfgDe(i), sn = c.sniper, st = S[i].sniper;
+  const cats = {};
+  for (const it of S[i].catalog?.mercado?.catalogo ?? []) if (it.categoria) cats[it.categoria] = (cats[it.categoria] || 0) + 1;
+  const ordem = Object.keys(CAT_MERCADO).filter((k) => cats[k]).concat(Object.keys(cats).filter((k) => !CAT_MERCADO[k]));
+  const chk = (attr, on, txt) => `<label class="sn-chk"><input type="checkbox" ${attr} ${on ? 'checked' : ''}><span>${txt}</span></label>`;
+  const outra = S.findIndex((s, k) => k !== i && cfgDe(k).sniper?.enabled);
+  const gasto = st?.gasto || { gold: 0, orb: 0 };
+  const moeda = (m, nome) => `<div class="sn-moeda">${chk(`data-snmoeda="${i}|${m}"`, sn.moedas[m].on, nome)}
+      <label class="sn-teto">teto 24 h <input type="number" min="0" value="${sn.moedas[m].tetoDia}" data-snteto="${i}|${m}"></label>
+      <span class="sn-gasto">gasto <b>${num(gasto[m] || 0)}</b></span></div>`;
+  const log = (st?.log ?? []).slice().reverse().slice(0, 14).map((l) => `<div class="sn-l ${SN_COR[l.tipo] || ''}"><span>${hora(l.t)}</span>${esc(l.texto)}</div>`).join('')
+    || `<div class="hint" style="margin:4px">${sn.enabled ? 'Procurando… a 1ª varredura sai em segundos.' : 'Ligue para começar a procurar.'}</div>`;
+  const status = st?.ultimaVarredura ? `Última varredura ${hora(st.ultimaVarredura)} · ${st.varreduras} no total · ${st.candidatos} item(ns) abaixo do limite agora${st.agendados ? ` · <b>${st.agendados} compra(s) agendada(s)</b>` : ''}` : '';
+  return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>
+    ${outra >= 0 && !sn.enabled ? `<div class="res">O sniper está ligado em ${nomeConta(outra)}. Ligar aqui desliga lá (só uma conta caça por vez, para não disputar o mesmo anúncio).</div>` : ''}
+    <div class="g4">
+      <label class="field">Modo<select data-snmodo="${i}"><option value="simular" ${sn.modo !== 'comprar' ? 'selected' : ''}>Simular (só anota)</option><option value="comprar" ${sn.modo === 'comprar' ? 'selected' : ''}>Comprar</option></select></label>
+      <label class="field">% abaixo da média (7 dias)<input type="number" min="1" max="90" value="${sn.desconto}" data-sndesc="${i}"></label>
+      <label class="field">Mín. de vendas em 7 dias<input type="number" min="1" value="${sn.minVendas}" data-snmin="${i}"></label>
+      <label class="field">Reserva de Coins<input type="number" min="0" value="${sn.reservaGold}" data-snres="${i}"></label>
+    </div>
+    <div class="sn-cats">${ordem.length ? ordem.map((k) => chk(`data-sncat="${i}|${k}"`, sn.categorias.includes(k), `${CAT_MERCADO[k] || k} <small>${cats[k]}</small>`)).join('') : '<span class="hint" style="margin:0">Abra o jogo desta conta para listar as categorias.</span>'}</div>
+    <div class="sn-moedas">${moeda('gold', 'Coins')}${moeda('orb', 'Gemas <small>(dinheiro real)</small>')}</div>
+    ${sn.modo === 'comprar' && !c.enabled ? '<div class="res bad">A chave "Automação" desta conta está desligada: não compra nada (só simula) até ligar.</div>' : ''}
+    <div class="sn-log">${log}</div>
+    ${status ? `<div class="hint">${status}</div>` : ''}
+    <div class="hint">Compra quando um anúncio está a % escolhida abaixo do preço médio vendido nos últimos 7 dias (só com vendas suficientes). Todo anúncio novo fica retido alguns minutos; quando libera, o jogo sorteia entre quem pediu nos primeiros 3 s, e o sniper pede logo depois de liberar (nunca antes). Varre a vitrine a cada ~30 s.</div>`;
+}
+function mudarSniper(i, patch) {
+  const c = cfgDe(i);
+  c.sniper = { ...c.sniper, ...patch, moedas: { ...c.sniper.moedas, ...(patch.moedas || {}) } };
+  salvarCfg(i, c);
+  // só uma conta caça por vez
+  if (patch.enabled) for (let k = 0; k < N; k++) if (k !== i && cfgDe(k).sniper?.enabled) { const o = cfgDe(k); o.sniper.enabled = false; salvarCfg(k, o); }
 }
 
 function retrato(pokeId) {
@@ -914,6 +958,21 @@ function acaoChange(d, value, checked) {
   const par = (v) => { const [i, k] = v.split('|'); return { i: +i, k, id: k === 'bola' ? ID_BOLA : ID_POCAO, kind: k === 'bola' ? 'ball' : 'item' }; };
   if (d.master) { const i = +d.master, c = cfgDe(i); c.enabled = checked; salvarCfg(i, c); toast(c.enabled ? 'Automação desta conta ligada' : 'Automação desta conta desligada'); }
   else if (d.mapa) { const i = +d.mapa, c = cfgDe(i); c.autoHunt.enabled = checked; salvarCfg(i, c); }
+  else if (d.snon) mudarSniper(+d.snon, { enabled: checked });
+  else if (d.snmodo) {
+    const i = +d.snmodo;
+    mudarSniper(i, { modo: value === 'comprar' ? 'comprar' : 'simular' });
+    if (value === 'comprar') toast('Sniper vai COMPRAR de verdade (com a chave Automação ligada), dentro dos tetos');
+  }
+  else if (d.sndesc) mudarSniper(+d.sndesc, { desconto: Math.min(90, Math.max(1, Math.round(Number(value) || 30))) });
+  else if (d.snmin) mudarSniper(+d.snmin, { minVendas: Math.max(1, Math.round(Number(value) || 5)) });
+  else if (d.snres) mudarSniper(+d.snres, { reservaGold: Math.max(0, Math.round(Number(value) || 0)) });
+  else if (d.sncat) {
+    const [i, cat] = d.sncat.split('|'), atuais = cfgDe(+i).sniper.categorias;
+    mudarSniper(+i, { categorias: checked ? [...new Set([...atuais, cat])] : atuais.filter((x) => x !== cat) });
+  }
+  else if (d.snmoeda) { const [i, m] = d.snmoeda.split('|'); mudarSniper(+i, { moedas: { [m]: { ...cfgDe(+i).sniper.moedas[m], on: checked } } }); }
+  else if (d.snteto) { const [i, m] = d.snteto.split('|'); mudarSniper(+i, { moedas: { [m]: { ...cfgDe(+i).sniper.moedas[m], tetoDia: Math.max(0, Math.round(Number(value) || 0)) } } }); }
   else if (d.twauto) app.twitch.auto(+d.twauto, checked);
   else if (d.kkset) { const [i, campo] = d.kkset.split('|'); if (campo === 'leve') app.kick.set(+i, 'completo', !checked); else app.kick.set(+i, campo, checked); }
   else if (d.kktipo) app.kick.set(+d.kktipo, 'tipo', value);
@@ -989,6 +1048,12 @@ app.onDados((i, d) => {
   if ('medidas' in d) s.medidas = d.medidas || {};
   if ('cfg' in d && d.cfg) s.cfg = d.cfg;
   if ('geo' in d) s.geo = d.geo || null;
+  if ('sniper' in d) {
+    const antes = s.sniper?.log?.at(-1)?.t || 0;
+    s.sniper = d.sniper || null;
+    for (const l of s.sniper?.log ?? []) if (l.t > antes && l.tipo === 'comprou') toast(`${nomeConta(i).replace(/<[^>]+>/g, '')}: ${l.texto}`);
+    if (painel?.i === i && painel.k === 'sniper') ovSync();
+  }
   agendarCalculo(i);
   renderSlot(i);
   if (MODO === 'ultra') renderUltra();

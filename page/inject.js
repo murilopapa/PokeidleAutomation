@@ -109,6 +109,11 @@
           multDanoSelvagem: m.multDanoSelvagem ?? 1.8,
         },
         tiposBoost: m.tiposBoost ?? [],
+        // Mercado da Comunidade: itens negociáveis (id, nome, categoria) e a retenção de anúncio novo.
+        mercado: {
+          catalogo: (m.mercado?.catalogo ?? []).map((i) => ({ id: i.id, nome: i.nome, categoria: i.categoria ?? null })),
+          cooldownCompraMs: Number(m.mercado?.cooldownCompraMs) || null,
+        },
         // itens próprios do jogo (nome e preço de NPC): entram no preço do loot, como na extensão oficial
         itensNossos: (m.itensNossos ?? []).map((i) => ({ id: i.id, name: i.name, npcPrice: i.npcPrice ?? null })),
         items: S.items,
@@ -127,8 +132,13 @@
       geoCampoInit(m);
     } else if (m.t === P.in.campo) {
       geoCampo(m);
+    } else if (m.t === P.in.mercado) {
+      sniperMercado(m);
+    } else if (m.t === P.in.erro) {
+      sniperErro(m);
     } else if (m.t === P.in.batalha && Array.isArray(m.ev)) {
       for (const ev of m.ev) {
+        if (ev.k === 'marketComprado' || ev.k === 'marketCompradoLote') sniperComprou(ev);
         if (ev.k === 'ataque') S.ultimoCombate = Date.now();
         if (ev.k === 'morte' && ev.quem === 'selvagem') registrarAbate(ev);
         if (ev.k === 'hunt' && ev.trocaLivreEm) S.trocaLivreEm = Number(ev.trocaLivreEm) || 0;
@@ -235,6 +245,217 @@
     for (const slot of m.fora ?? []) s.slots.delete(slot);
   }
   addEventListener('pagehide', geoFecharSessao);
+
+
+  // ------------------------------------------------------------ sniper do Mercado (itens)
+  // Lê o resumo da vitrine de itens (menor preço de cada item + média vendida em 7 dias, numa
+  // mensagem só) a cada ~30 s. Item da categoria escolhida com anúncio X% abaixo da média abre a
+  // lista daquele item e, para cada anúncio barato, entra no sorteio da liberação: o jogo segura
+  // todo anúncio novo por alguns minutos (retenção) e, quando libera, sorteia entre quem pediu nos
+  // primeiros 3 s. O pedido sai DEPOIS da liberação, pelo relógio do servidor — nunca antes (isso
+  // seria furar a trava, e os Termos proíbem). Em "simular" só anota o que teria comprado.
+  const SN = {
+    proxVarredura: 0,
+    pedidosItem: new Map(),   // `${itemId}:${moeda}` -> último pedido (ms)
+    filaItem: [],             // [{ itemId, moeda, limite, ref }]
+    ultimoPedidoItem: 0,
+    vistos: new Map(),        // anúncio id -> quando foi tratado
+    agendados: new Map(),     // anúncio id -> timer
+    pendentes: [],            // compras enviadas esperando o resultado
+    log: [],
+    status: { varreduras: 0, ultimaVarredura: 0, candidatos: 0 },
+  };
+  const SN_CHAVE_GASTOS = 'pie-sniper-gastos';
+  let snGastos = (() => { try { return JSON.parse(localStorage.getItem(SN_CHAVE_GASTOS)) || []; } catch (_) { return []; } })();
+  const snCfg = () => cfg?.sniper ?? {};
+  const snLigado = () => !!snCfg().enabled;
+  const snCompra = () => snLigado() && snCfg().modo === 'comprar' && !!cfg.enabled;
+  const agoraSrv = () => Date.now() - (S.desvio || 0);
+  const nomeItemSn = (id) => S.catalog?.mercado?.catalogo?.find((i) => i.id === id)?.nome || S.items?.[id]?.name || `item ${id}`;
+  const fmtN = (n) => Math.round(n).toLocaleString('pt-BR');
+  const moedaTxt = (m) => (m === 'orb' ? 'Gemas' : 'Coins');
+
+  function snLog(tipo, texto, extra = {}) {
+    SN.log.push({ t: Date.now(), tipo, texto, ...extra });
+    if (SN.log.length > 60) SN.log.splice(0, SN.log.length - 60);
+    snPublicar();
+  }
+  let snPubTimer = null;
+  function snPublicar() {
+    if (snPubTimer) return;
+    snPubTimer = setTimeout(() => {
+      snPubTimer = null;
+      post('sniper', { sniper: { at: Date.now(), ...SN.status, gasto: snGastoDia(), agendados: SN.agendados.size, log: SN.log.slice(-40) } });
+    }, 500);
+  }
+  function snGastoDia() {
+    const desde = Date.now() - 24 * 3600 * 1000;
+    snGastos = snGastos.filter((g) => g.t >= desde);
+    const out = { gold: 0, orb: 0 };
+    for (const g of snGastos) out[g.moeda] = (out[g.moeda] || 0) + g.valor;
+    return out;
+  }
+  function snGravarGastos() { try { localStorage.setItem(SN_CHAVE_GASTOS, JSON.stringify(snGastos)); } catch (_) { /* ok */ } }
+
+  /** Quantas unidades ainda cabem (teto do dia, reserva de Coins e saldo). */
+  function snCabe(moeda, preco, qtd) {
+    const c = snCfg();
+    const m = c.moedas?.[moeda];
+    if (!m?.on || !(preco > 0)) return 0;
+    const teto = Number(m.tetoDia) || 0;
+    if (teto <= 0) return 0;
+    const usado = snGastoDia()[moeda] || 0;
+    const saldo = moeda === 'orb' ? Number(S.eu?.orbs) || 0 : (Number(S.eu?.gold) || 0) - (Number(c.reservaGold) || 0);
+    const pode = Math.min(teto - usado, saldo);
+    return Math.max(0, Math.min(qtd, Math.floor(pode / preco)));
+  }
+
+  function snItemValido(id) {
+    const c = snCfg();
+    const it = S.catalog?.mercado?.catalogo?.find((x) => x.id === id);
+    if (!it) return false;
+    if (Array.isArray(c.itens) && c.itens.length) return c.itens.includes(id);
+    return (c.categorias ?? []).includes(it.categoria);
+  }
+
+  let snModoAntes = null;
+  function sniperCfgMudou() {
+    // Trocou de modo: o que só foi anotado em "simular" pode ser comprado agora (e varre já).
+    const modo = snLigado() ? snCfg().modo : null;
+    if (modo !== snModoAntes) {
+      for (const [id, v] of SN.vistos) if (v.modo !== 'comprar') SN.vistos.delete(id);
+      SN.pedidosItem.clear();
+      if (modo) SN.proxVarredura = Date.now() + 1500;
+      snModoAntes = modo;
+    }
+    if (!snLigado()) {
+      for (const t of SN.agendados.values()) clearTimeout(t);
+      if (SN.agendados.size) snLog('info', 'sniper desligado: compras agendadas canceladas');
+      SN.agendados.clear();
+      SN.filaItem = [];
+    } else if (!SN.status.ultimaVarredura) SN.proxVarredura = Date.now() + 2000;
+    snPublicar();
+  }
+
+  function sniperTick() {
+    const agora = Date.now();
+    if (snLigado() && S.connected && S.catalog) {
+      if (agora >= SN.proxVarredura) {
+        SN.proxVarredura = agora + 25000 + Math.random() * 10000; // ~30 s, irregular
+        if (sendGame(P.out.mercadoItens())) { SN.status.varreduras++; SN.status.ultimaVarredura = agora; }
+      }
+      // no máximo um pedido de lista de item a cada ~1,5 s
+      if (SN.filaItem.length && agora - SN.ultimoPedidoItem > 1500) {
+        const x = SN.filaItem.shift();
+        SN.ultimoPedidoItem = agora;
+        SN.pedidosItem.set(`${x.itemId}:${x.moeda}`, agora);
+        SN.limites.set(`${x.itemId}:${x.moeda}`, x);
+        sendGame(P.out.mercadoItem(x.itemId, x.moeda));
+      }
+    }
+    // resultados que nunca chegaram
+    SN.pendentes = SN.pendentes.filter((p) => {
+      if (agora - p.t < 30000) return true;
+      snLiberar(p);
+      snLog('erro', `${p.nome}: sem resposta do jogo, considerado não comprado`);
+      return false;
+    });
+    setTimeout(sniperTick, 500);
+  }
+  SN.limites = new Map();
+
+  function sniperMercado(m) {
+    if (!snLigado()) return;
+    if (m.aba === 'itens' && m.resumo) {
+      const c = snCfg();
+      const desconto = Math.min(90, Math.max(1, Number(c.desconto) || 30)) / 100;
+      const minVendas = Math.max(1, Number(c.minVendas) || 5);
+      let cand = 0;
+      for (const [k, r] of Object.entries(m.resumo)) {
+        const id = Number(k);
+        if (!r?.anuncios || !snItemValido(id)) continue;
+        for (const moeda of ['gold', 'orb']) {
+          if (!c.moedas?.[moeda]?.on) continue;
+          const menor = moeda === 'orb' ? r.minOrb : r.minGold;
+          const ref = m.medias?.[id]?.[moeda];
+          if (menor == null || !ref?.media || (ref.unidades ?? 0) < minVendas) continue;
+          const limite = Math.floor(ref.media * (1 - desconto));
+          if (menor > limite) continue;
+          cand++;
+          const chave = `${id}:${moeda}`;
+          if (Date.now() - (SN.pedidosItem.get(chave) || 0) < 20000) continue;
+          if (!SN.filaItem.some((x) => x.itemId === id && x.moeda === moeda)) SN.filaItem.push({ itemId: id, moeda, limite, ref: ref.media });
+        }
+      }
+      SN.status.candidatos = cand;
+      snPublicar();
+      return;
+    }
+    if (m.aba === 'item' && Array.isArray(m.linhas)) {
+      const x = SN.limites.get(`${m.itemId}:${m.moeda}`);
+      if (!x) return;
+      const nome = nomeItemSn(m.itemId);
+      for (const a of m.linhas) {
+        if (!a?.id || !(a.preco <= x.limite) || SN.vistos.has(a.id)) continue;
+        if (a.vendedor && S.eu?.nick && a.vendedor === S.eu.nick) continue;
+        SN.vistos.set(a.id, { t: Date.now(), modo: snCompra() ? 'comprar' : 'simular' });
+        const pct = Math.round((1 - a.preco / x.ref) * 100);
+        const base = { id: a.id, itemId: m.itemId, nome, moeda: a.moeda || m.moeda, preco: a.preco, qtdAnuncio: a.qtd, vendedor: a.vendedor, ref: Math.round(x.ref), pct };
+        const libera = Number(a.compravelEm) || 0;
+        const quando = libera > agoraSrv() ? `libera em ${Math.ceil((libera - agoraSrv()) / 1000)} s` : 'já liberado';
+        const resumo = `${nome} ×${a.qtd} por ${fmtN(a.preco)} ${moedaTxt(base.moeda)}/un. (média ${fmtN(x.ref)}, ${pct}% abaixo) · ${quando}`;
+        if (!snCompra()) { snLog('simulado', `teria comprado: ${resumo}`, base); continue; }
+        const qtd = snCabe(base.moeda, a.preco, a.qtd);
+        if (qtd < 1) { snLog('pulado', `sem teto/saldo para: ${resumo}`, base); continue; }
+        // Pelo relógio do servidor: só depois de liberar, com 0,4–1,2 s de folga (dentro da janela de 3 s).
+        const espera = Math.max(0, libera - agoraSrv()) + (libera ? 400 + Math.random() * 800 : 300 + Math.random() * 700);
+        snLog('agendado', `vai tentar: ${resumo}`, base);
+        SN.agendados.set(a.id, setTimeout(() => snDisparar({ ...base, qtd, tentativa: 1 }), espera));
+      }
+      for (const [id, v] of SN.vistos) if (Date.now() - v.t > 6 * 3600 * 1000) SN.vistos.delete(id);
+      snPublicar();
+    }
+  }
+
+  function snDisparar(c) {
+    SN.agendados.delete(c.id);
+    if (!snCompra()) { snLog('info', `${c.nome}: cancelado (sniper ou automação desligados)`); return; }
+    const qtd = snCabe(c.moeda, c.preco, c.qtd);
+    if (qtd < 1) { snLog('pulado', `${c.nome}: estourou o teto do dia ou o saldo`); return; }
+    if (!sendGame(P.out.mercadoComprar(c.id, qtd, c.preco, c.moeda))) { snLog('erro', `${c.nome}: jogo desconectado`); return; }
+    const p = { ...c, qtd, t: Date.now(), valor: qtd * c.preco };
+    snGastos.push({ t: Date.now(), moeda: c.moeda, valor: p.valor, id: c.id }); // reserva; devolve se perder
+    snGravarGastos();
+    SN.pendentes.push(p);
+    snLog('enviado', `pedido enviado: ${c.nome} ×${qtd} por ${fmtN(c.preco)} ${moedaTxt(c.moeda)}/un.`, c);
+  }
+  function snLiberar(p) {
+    const i = snGastos.findIndex((g) => g.id === p.id && g.valor === p.valor);
+    if (i >= 0) { snGastos.splice(i, 1); snGravarGastos(); }
+  }
+
+  function sniperErro(m) {
+    const ch = String(m.chave || '');
+    if (!ch.startsWith('market.') || !SN.pendentes.length) return;
+    const p = SN.pendentes[0];
+    if (ch === 'market.sorteio' || ch === 'market.sorteioEspera') { snLog('sorteio', `${p.nome}: entrou no sorteio da liberação`); return; }
+    SN.pendentes.shift();
+    snLiberar(p);
+    if (ch === 'market.retencao' && p.tentativa < 2) {
+      // relógio um pouco adiantado: tenta uma vez mais, 1,2 s depois (ainda dentro da janela)
+      snLog('info', `${p.nome}: ainda em retenção, tentando de novo`);
+      SN.agendados.set(p.id, setTimeout(() => snDisparar({ ...p, tentativa: 2 }), 1200));
+      return;
+    }
+    snLog(ch === 'market.sorteioPerdeu' ? 'perdeu' : 'erro', `${p.nome}: ${ch === 'market.sorteioPerdeu' ? 'outro jogador levou no sorteio' : (m.msg || ch)}`);
+  }
+
+  function sniperComprou(ev) {
+    if (!SN.pendentes.length) return;
+    const p = SN.pendentes.shift();
+    snLog('comprou', `COMPROU: ${ev.descricao || p.nome} por ${fmtN(p.valor)} ${moedaTxt(p.moeda)} (média ${fmtN(p.ref)}, ${p.pct}% abaixo)`, p);
+  }
+  setTimeout(sniperTick, 3000);
 
   // ------------------------------------------------------------ trava de combate (troca de hunt)
   // O jogo só deixa trocar de área com 3 s sem trocar dano — é quando o botão "Ir para o Centro
@@ -665,6 +886,7 @@
       const antes = cfg.enabled;
       cfg = e.data.cfg;
       if (antes !== cfg.enabled) log(cfg.enabled ? 'automação LIGADA' : 'automação desligada');
+      sniperCfgMudou();
       publish(true);
     }
     if (e.data.type === 'selectHunt' && typeof e.data.slug === 'string') {

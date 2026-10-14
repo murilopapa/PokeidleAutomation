@@ -15,6 +15,20 @@ var PIE_DEFAULT_CFG = {
     riscoMax: 'alto', // 'baixo' = só Tranquila (≥20 kills/vida) | 'alto' = Segura (≥5, como o guia)
     ganhoMin: 0,      // 0 = troca sempre que o 1º lugar mudar; X = só se render X% a mais
   },
+  // Sniper do Mercado (itens): compra anúncio X% abaixo da média vendida em 7 dias.
+  sniper: {
+    enabled: false,
+    modo: 'simular',               // 'simular' (só anota) | 'comprar' (precisa da chave geral também)
+    categorias: ['stone', 'mega'], // categorias do Mercado (Pedras, Mega Stones…)
+    itens: [],                     // se tiver algum, só estes itens (ignora categorias)
+    desconto: 30,                  // % abaixo da média dos últimos 7 dias
+    minVendas: 5,                  // unidades vendidas em 7 dias para confiar na média
+    reservaGold: 0,                // nunca deixar os Coins abaixo disto
+    moedas: {
+      gold: { on: true, tetoDia: 1000000 }, // teto de gasto em 24 h
+      orb: { on: false, tetoDia: 0 },       // Gemas = dinheiro de verdade: começa desligado
+    },
+  },
 };
 
 function pieMergeCfg(saved) {
@@ -24,6 +38,7 @@ function pieMergeCfg(saved) {
     ...d,
     ...saved,
     limits: { ...d.limits, ...(saved.limits || {}) },
+    sniper: { ...d.sniper, ...(saved.sniper || {}), moedas: { gold: { ...d.sniper.moedas.gold, ...(saved.sniper?.moedas?.gold || {}) }, orb: { ...d.sniper.moedas.orb, ...(saved.sniper?.moedas?.orb || {}) } } },
     autoHunt: { ...d.autoHunt, ...(saved.autoHunt || {}), ...(saved.autoHunt?.riscoMax === 'médio' ? { riscoMax: 'alto' } : {}) },
     // regras antigas (min / buyTo / maxPerBuy) viram (min / qty)
     rules: Array.isArray(saved.rules)

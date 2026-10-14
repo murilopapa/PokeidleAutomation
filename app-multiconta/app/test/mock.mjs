@@ -126,6 +126,7 @@ wssJogo.on('connection', (ws) => {
     tabelaTipos: FX.tipos, ampliacaoHunt: 1.5, multHpSelvagem: 5, multDanoSelvagem: 1.8,
     captura: { base: 0.0075 }, chanceShiny: 0.001, tiposBoost: [],
     // Item próprio do jogo (não está no items.json) e preços cobrados pelo servidor.
+    mercado: { cooldownCompraMs: 120000, catalogo: [{ id: 2, nome: 'Fire Stone', categoria: 'stone' }, { id: 3, nome: 'Water Stone', categoria: 'stone' }, { id: 4, nome: 'Air Tank', categoria: 'loot' }, { id: 9, nome: 'Charizardite X', categoria: 'mega' }] },
     itensNossos: [{ id: 90001, name: 'Golden Potion', category: 'heal', npcPrice: 5000, healPct: 1 }],
     itensCompraveis: [{ itemId: 200, preco: 50 }, { itemId: 201, preco: 150 }, { itemId: 90001, preco: 4000 }],
   }));
@@ -140,6 +141,29 @@ wssJogo.on('connection', (ws) => {
     const m = JSON.parse(raw);
     log.push({ conta: n, ...m });
     console.log('JOGO', n, JSON.stringify(m));
+    // Mercado falso: Fire Stone com um anúncio 40% abaixo da média (retido por 6 s) e outro caro;
+    // Water Stone barata mas com poucas vendas; Air Tank barato mas fora das categorias.
+    if (m.t === 'market.itens') {
+      ws.send(JSON.stringify({ t: 'market', aba: 'itens',
+        resumo: { 2: { anuncios: 2, unidades: 4, minGold: 6000, minOrb: null }, 3: { anuncios: 1, unidades: 1, minGold: 1000 }, 4: { anuncios: 1, unidades: 5, minGold: 10 } },
+        medias: { 2: { gold: { media: 10000, unidades: 20 } }, 3: { gold: { media: 5000, unidades: 2 } }, 4: { gold: { media: 1000, unidades: 50 } } } }));
+    }
+    if (m.t === 'market.item') {
+      ws.mercadoLib = Date.now() + 6000; // libera 6 s depois de cada consulta
+      const linhas = m.itemId === 2 ? [
+        { id: 501, tipo: 'item', qtd: 3, preco: 6000, moeda: 'gold', vendedor: 'barateiro', compravelEm: ws.mercadoLib },
+        { id: 502, tipo: 'item', qtd: 1, preco: 9000, moeda: 'gold', vendedor: 'caro', compravelEm: 0 },
+      ] : [];
+      ws.send(JSON.stringify({ t: 'market', aba: 'item', itemId: m.itemId, moeda: m.moeda, linhas }));
+    }
+    if (m.t === 'market.comprar') {
+      console.log('MERCADO compra', m.id, 'faltavam', (ws.mercadoLib || 0) - Date.now(), 'ms');
+      if (m.id === 501 && Date.now() < ws.mercadoLib) ws.send(JSON.stringify({ t: 'erro', chave: 'market.retencao' }));
+      else {
+        ws.send(JSON.stringify({ t: 'erro', chave: 'market.sorteio' }));
+        setTimeout(() => ws.send(JSON.stringify({ t: 'batalha', ev: [{ k: 'marketComprado', descricao: `${m.qtd}× Fire Stone` }] })), 800);
+      }
+    }
     if (m.t === 'hunt.select') ws.send(JSON.stringify({ t: 'estado', estado: { huntSlug: m.slug } }));
     if (m.t === 'shop.buy') {
       const campo = m.kind === 'ball' ? 'balls' : 'items';

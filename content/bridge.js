@@ -47,6 +47,7 @@
     else if (d.type === 'state') { chrome.storage.local.set({ snapshot: d.state }); guardarMedida(d.state?.xpMedido); }
     else if (d.type === 'catalog') chrome.storage.local.set({ catalog: d.catalog });
     else if (d.type === 'geo') chrome.storage.local.set({ geo: d.geo });
+    else if (d.type === 'sniper') chrome.storage.local.set({ sniper: d.sniper });
     else if (d.type === 'log') queueLog(d.entry);
   });
 

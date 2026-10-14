@@ -343,3 +343,21 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .kkg button.meio{color:var(--fg);box-shadow:inset 0 0 0 1px var(--line);background:linear-gradient(90deg,rgba(83,252,24,.18) 50%,transparent 50%)}
 .kkg button:disabled{opacity:.45;cursor:default}
 .kkg.vazio{opacity:.6}
+
+/* Sniper do Mercado */
+.sn-cats{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 0}
+.sn-chk{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--fg);cursor:pointer}
+.sn-chk small{color:var(--muted)}
+.sn-moedas{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.sn-moeda{border:1px solid var(--line);border-radius:8px;padding:4px 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px}
+.sn-teto{display:flex;align-items:center;gap:5px;color:var(--muted)}
+.sn-teto input{width:96px;padding:3px 6px}
+.sn-gasto{color:var(--muted)}
+.sn-log{margin-top:8px;max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card2)}
+.sn-l{font-size:11.5px;padding:4px 8px;border-top:1px solid var(--line);color:var(--mid)}
+.sn-l:first-child{border-top:0}
+.sn-l span{color:var(--muted);margin-right:6px;font-variant-numeric:tabular-nums}
+.sn-l.ok{color:var(--ok);font-weight:700}
+.sn-l.bad{color:var(--bad)}
+.sn-l.sim{color:var(--accent)}
+.sn-l.ag{color:var(--fg)}

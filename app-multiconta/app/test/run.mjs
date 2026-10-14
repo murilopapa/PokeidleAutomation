@@ -275,6 +275,31 @@ check('painel do mapa mostra o top 3 do motor novo', /Top 3/.test(mapaTxt) && /(
 await shot('mapa-motor.png');
 await ui.keyboard.press('Escape'); await sleep(300);
 
+// Sniper do Mercado (itens): simula, depois compra só depois da retenção, só o barato
+const iSn = await ui.$$eval('.slot', (e) => +e.find((x) => /segunda/.test(x.querySelector('.nome')?.textContent || '')).dataset.slot);
+await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sleep(800);
+check('painel do sniper abre com as categorias do Mercado', /Pedras/.test(await ovTexto()) && /Mega Stones/.test(await ovTexto()), (await ovTexto()).replace(/\s+/g, ' ').slice(0, 300));
+await ovClicar(`[data-snon="${iSn}"]`); await sleep(8000);
+const snLog1 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
+check('simular: anota a Fire Stone barata e ignora o resto', snLog1.some((l) => /^simulado: teria comprado: Fire Stone ×3 por 6\.000/.test(l)) && !snLog1.some((l) => /Water|Air|9\.000/.test(l)) && !/MERCADO compra/.test(mockOut), JSON.stringify(snLog1));
+await shot('sniper-simular.png');
+// modo comprar (com a chave Automação da conta ligada)
+if (!(await ui.isChecked(`[data-master="${iSn}"]`))) await ui.click(`.slot[data-slot="${iSn}"] .bar label.sw`);
+await ui.evaluate((i) => { mudarSniper(i, { modo: 'comprar' }); }, iSn);
+await sleep(16000);
+const comprasSn = mockOut.split('\n').filter((l) => l.startsWith('MERCADO compra'));
+const snLog2 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
+check('comprar: pediu só o anúncio barato e só depois de liberar', comprasSn.length === 1 && / 501 /.test(comprasSn[0]) && parseFloat(comprasSn[0].split('faltavam ')[1]) <= 0, comprasSn.join(" / "));
+check('comprar: entrou no sorteio e registrou a compra', snLog2.some((l) => /^sorteio:/.test(l)) && snLog2.some((l) => /^comprou: COMPROU: 3× Fire Stone por 18\.000 Coins/.test(l)), JSON.stringify(snLog2.slice(-5)));
+check('gasto do dia contado', (await ui.evaluate((i) => S[i].sniper?.gasto?.gold, iSn)) === 18000);
+// só uma conta caça por vez
+const outraSn = (iSn + 1) % 4;
+await ui.evaluate((k) => mudarSniper(k, { enabled: true }), outraSn); await sleep(300);
+check('ligar o sniper em outra conta desliga na primeira', await ui.evaluate(([a, b]) => !cfgDe(a).sniper.enabled && cfgDe(b).sniper.enabled, [iSn, outraSn]));
+await ui.evaluate((k) => mudarSniper(k, { enabled: false }), outraSn);
+await shot('sniper-comprou.png');
+await ui.keyboard.press('Escape'); await sleep(300);
+
 // Golden Potion: item próprio do jogo (welcome), preço do servidor e cura em %
 const gp = await ui.evaluate(() => S.map((s) => ({ nick: s.snap?.nick, ops: opcoes(S.indexOf(s), 'item').map((o) => o.nome + '=' + o.preco).join(',') })));
 check('Golden Potion aparece na compra com o preço do servidor', gp.every((x) => /Golden Potion=4000/.test(x.ops)) && gp.every((x) => /Small Potion=50/.test(x.ops)), JSON.stringify(gp.map((x) => x.ops)));
