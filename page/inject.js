@@ -264,6 +264,15 @@
     status: { varreduras: 0, ultimaVarredura: 0, candidatos: 0 },
   };
   const SN_CHAVE_GASTOS = 'pie-sniper-gastos';
+  // Histórico que fica (sobrevive a fechar o app): cada compra ganha, sorteio perdido, erro e o que
+  // o modo simular teria comprado. O painel resume ("desde ontem: 5 fragmentos com 32% de desconto").
+  const SN_CHAVE_HIST = 'pie-sniper-hist';
+  let snHist = (() => { try { return JSON.parse(localStorage.getItem(SN_CHAVE_HIST)) || []; } catch (_) { return []; } })();
+  function snRegistrar(res, c, extra = {}) {
+    snHist.push({ t: Date.now(), res, itemId: c.itemId, nome: c.nome, moeda: c.moeda, qtd: c.qtd ?? c.qtdAnuncio ?? 1, preco: c.preco, ref: c.ref, pct: c.pct, vendedor: c.vendedor ?? null, ...extra });
+    if (snHist.length > 1500) snHist = snHist.slice(-1500);
+    try { localStorage.setItem(SN_CHAVE_HIST, JSON.stringify(snHist)); } catch (_) { /* cota cheia */ }
+  }
   let snGastos = (() => { try { return JSON.parse(localStorage.getItem(SN_CHAVE_GASTOS)) || []; } catch (_) { return []; } })();
   const snCfg = () => cfg?.sniper ?? {};
   const snLigado = () => !!snCfg().enabled;
@@ -284,7 +293,7 @@
     snPubTimer = setTimeout(() => {
       snPubTimer = null;
       const olhados = [...SN.olhados.values()].sort((a, b) => b.pct - a.pct).slice(0, 12);
-      post('sniper', { sniper: { at: Date.now(), ...SN.status, gasto: snGastoDia(), agendados: SN.agendados.size, olhados, log: SN.log.slice(-40) } });
+      post('sniper', { sniper: { at: Date.now(), ...SN.status, gasto: snGastoDia(), agendados: SN.agendados.size, olhados, log: SN.log.slice(-40), hist: snHist.slice(-600) } });
     }, 500);
   }
   function snGastoDia() {
@@ -456,7 +465,7 @@
         const quando = libera > agoraSrv() ? `libera em ${Math.ceil((libera - agoraSrv()) / 1000)} s` : 'já liberado';
         const comp = [medVen != null ? `últimas ${vendas.length} vendas ${fmtN(medVen)}` : 'sem vendas recentes', medVit != null ? `vitrine ${fmtN(medVit)}` : 'sem outros anúncios'].join(' · ');
         const resumo = `${nome} ×${a.qtd} por ${fmtN(a.preco)} ${moedaTxt(base.moeda)}/un. — ${pct}% abaixo (${comp}) · ${quando}`;
-        if (!snCompra()) { snLog('simulado', `teria comprado: ${resumo}`, base); continue; }
+        if (!snCompra()) { snLog('simulado', `teria comprado: ${resumo}`, base); snRegistrar('simulado', { ...base, qtd: a.qtd }); continue; }
         const qtd = snCabe(base.moeda, a.preco, a.qtd);
         if (qtd < 1) { snLog('pulado', `sem teto/saldo para: ${resumo}`, base); continue; }
         // Pelo relógio do servidor: só depois de liberar, com 0,4–1,2 s de folga (dentro da janela de 3 s).
@@ -505,11 +514,13 @@
       return;
     }
     snLog(ch === 'market.sorteioPerdeu' ? 'perdeu' : 'erro', `${p.nome}: ${ch === 'market.sorteioPerdeu' ? 'outro jogador levou no sorteio' : (m.msg || ch)}`);
+    snRegistrar(ch === 'market.sorteioPerdeu' ? 'perdeu' : 'erro', p, ch === 'market.sorteioPerdeu' ? {} : { motivo: m.msg || ch });
   }
 
   function sniperComprou(ev) {
     if (!SN.pendentes.length) return;
     const p = SN.pendentes.shift();
+    snRegistrar('ganhou', p, { descricao: ev.descricao || null });
     snLog('comprou', `COMPROU: ${ev.descricao || p.nome} por ${fmtN(p.valor)} ${moedaTxt(p.moeda)} (referência ${fmtN(p.ref)}/un., ${p.pct}% abaixo)`, p);
   }
   setTimeout(sniperTick, 3000);

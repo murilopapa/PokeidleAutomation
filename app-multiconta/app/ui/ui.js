@@ -391,7 +391,7 @@ function barHTML(i) {
     ${chip('bola', 'Bola', bola?.enabled, `${esc(nomeCurto(bola))} &lt; ${num(bola?.min ?? 0)}`)}
     ${chip('poc', 'Poção', poc?.enabled, `${esc(nomeCurto(poc))} &lt; ${num(poc?.min ?? 0)}`)}
     ${chip('mapa', 'Mapa', c.autoHunt?.enabled, 'top 1')}
-    ${chip('sniper', 'Sniper', c.sniper?.enabled, `${c.sniper?.moedas?.orb?.on ? 'Gemas ' : ''}−${c.sniper?.desconto}% ${c.sniper?.modo === 'comprar' ? 'comprando' : 'simulando'}`)}
+    ${chip('sniper', 'Sniper', c.sniper?.enabled, (() => { const n = snResumo(S[i].sniper?.hist, 24).ganhou.length; return n ? `${n} compra${n > 1 ? 's' : ''}` : c.sniper?.modo === 'comprar' ? 'comprando' : 'simulando'; })())}
     <span class="sp"></span>
     <label class="sw master-c" title="Chave geral desta conta: sem ela nada age no jogo"><span>Automação</span><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span></label>`;
 }
@@ -445,7 +445,9 @@ function sniperHTML(i, sw, fechar) {
   const olh = st?.olhados ?? [];
   const tabela = olh.length ? `<div class="sn-olh"><div class="sn-oh"><span>Olhados agora (o mais barato de cada item)</span><span>preço</span><span>últimas vendas</span><span>vitrine</span><span>abaixo</span></div>${olh.map((o) => `<div class="sn-or ${o.pct >= sn.desconto ? 'bom' : ''}"><span>${esc(o.nome)}${o.moeda === 'orb' ? ' <small>Gemas</small>' : ''}</span><span>${num(o.menor)}</span><span>${o.medVen != null ? num(o.medVen) : '—'}</span><span>${o.medVit != null ? num(o.medVit) : '—'}</span><b>${o.ref ? (o.pct > 0 ? `−${o.pct}%` : `+${-o.pct}%`) : 'sem ref.'}</b></div>`).join('')}</div>` : '';
   const status = st?.ultimaVarredura ? `Última varredura ${hora(st.ultimaVarredura)} · ${st.varreduras} varreduras · ${st.candidatos} item(ns) mudaram na última · ${st.respostas || 0} listas de item lidas${st.agendados ? ` · <b>${st.agendados} compra(s) agendada(s)</b>` : ''}` : '';
-  return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>
+  const abas = `<div class="sn-abas"><button data-sntab="config" class="${snAba === 'config' ? 'on' : ''}">Ajustes e agora</button><button data-sntab="compras" class="${snAba === 'compras' ? 'on' : ''}">Compras${(() => { const n = snResumo(st?.hist, 24).ganhou.length; return n ? ` <b>${n}</b>` : ''; })()}</button></div>`;
+  if (snAba === 'compras') return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>${abas}${comprasHTML(i, st)}`;
+  return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>${abas}
     ${outra >= 0 && !sn.enabled ? `<div class="res">O sniper está ligado em ${nomeConta(outra)}. Ligar aqui desliga lá (só uma conta caça por vez, para não disputar o mesmo anúncio).</div>` : ''}
     <div class="g4">
       <label class="field">Modo<select data-snmodo="${i}"><option value="simular" ${sn.modo !== 'comprar' ? 'selected' : ''}>Simular (só anota)</option><option value="comprar" ${sn.modo === 'comprar' ? 'selected' : ''}>Comprar</option></select></label>
@@ -461,6 +463,58 @@ function sniperHTML(i, sw, fechar) {
     ${status ? `<div class="hint">${status}</div>` : ''}
     <div class="hint">Referência de cada item = a MENOR entre a mediana das últimas ${sn.amostras} vendas dele e a dos ${sn.amostras} outros anúncios mais baratos da vitrine agora. Só pega anúncio ${sn.desconto}% abaixo disso. Todo anúncio novo fica retido alguns minutos; quando libera, o jogo sorteia entre quem pediu nos primeiros 3 s, e o sniper pede logo depois de liberar (nunca antes). Varre a vitrine a cada ~30 s.</div>`;
 }
+// ---- histórico do sniper (aba Compras)
+let snAba = 'config';
+let snPeriodo = 24; // horas (0 = tudo)
+const TAXA_VENDA = 0.15; // comissão do Mercado sobre item (shared/taxa-mercado.mjs do jogo), quem paga é quem vende
+function snResumo(hist, horas) {
+  const desde = horas ? Date.now() - horas * 3600000 : 0;
+  const h = (hist ?? []).filter((x) => x.t >= desde);
+  return { todos: h, ganhou: h.filter((x) => x.res === 'ganhou'), perdeu: h.filter((x) => x.res === 'perdeu'), erro: h.filter((x) => x.res === 'erro'), simulado: h.filter((x) => x.res === 'simulado') };
+}
+const moedaN = (m) => (m === 'orb' ? 'Gemas' : 'Coins');
+const quando = (t) => { const d = new Date(t); const hoje = new Date().toDateString() === d.toDateString(); return hoje ? hora(t) : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+function comprasHTML(i, st) {
+  const r = snResumo(st?.hist, snPeriodo);
+  const per = `<label class="sn-per">Período <select data-snper="${i}">${[[24, 'últimas 24 h'], [168, 'últimos 7 dias'], [0, 'tudo']].map(([v, n]) => `<option value="${v}" ${snPeriodo === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
+  const lista = r.ganhou.length ? r.ganhou : r.simulado;
+  const simul = !r.ganhou.length && r.simulado.length;
+  if (!lista.length) {
+    return per + `<div class="vazio-top">${r.perdeu.length ? `Nenhuma compra ainda; ${r.perdeu.length} sorteio(s) perdido(s) para outro jogador.` : 'Nada comprado (nem simulado) neste período.'}</div>`;
+  }
+  // por moeda e por item: unidades, custo médio, referência de agora, preço mínimo (empate) e lucro se revender
+  const refAgora = {};
+  for (const o of st?.olhados ?? []) if (o.ref) refAgora[`${o.nome}|${o.moeda}`] = o.ref;
+  const porItem = {};
+  for (const x of lista) {
+    const k = `${x.nome}|${x.moeda}`;
+    const g = (porItem[k] ??= { nome: x.nome, moeda: x.moeda, un: 0, custo: 0, refCompra: 0 });
+    g.un += x.qtd; g.custo += x.qtd * x.preco; g.refCompra += x.qtd * (x.ref || x.preco);
+  }
+  const totais = {};
+  const linhasItem = Object.entries(porItem).map(([k, g]) => {
+    const medio = g.custo / g.un;
+    const ref = refAgora[k] ?? g.refCompra / g.un;
+    const minimo = Math.ceil(medio / (1 - TAXA_VENDA));
+    const liquido = Math.floor(ref * (1 - TAXA_VENDA));
+    const lucro = (liquido - medio) * g.un;
+    const t = (totais[g.moeda] ??= { gasto: 0, lucro: 0, un: 0, ref: 0 });
+    t.gasto += g.custo; t.lucro += lucro; t.un += g.un; t.ref += g.refCompra;
+    return `<div class="sn-it"><span>${esc(g.nome)}</span><span>${num(g.un)}</span><span>${num(Math.round(medio))}</span><span title="${refAgora[k] ? 'referência de agora (últimas vendas / vitrine)' : 'referência na hora da compra'}">${num(Math.round(ref))}${refAgora[k] ? '' : '*'}</span><span title="abaixo disso você perde dinheiro (a taxa de 15% sai de quem vende)">${num(minimo)}</span><b class="${lucro >= 0 ? 'ok' : 'bad'}">${lucro >= 0 ? '+' : ''}${num(Math.round(lucro))}</b><span>${moedaN(g.moeda)}</span></div>`;
+  }).join('');
+  const cards = Object.entries(totais).map(([m, t]) => `<div class="sn-card"><b>${num(t.un)}</b><span>unidades${simul ? ' (simulado)' : ''}</span></div>
+    <div class="sn-card"><b>${num(Math.round(t.gasto))} ${moedaN(m)}</b><span>${simul ? 'teria gastado' : 'gasto'}</span></div>
+    <div class="sn-card"><b>${t.ref ? Math.round((1 - t.gasto / t.ref) * 100) : 0}%</b><span>desconto médio</span></div>
+    <div class="sn-card"><b class="${t.lucro >= 0 ? 'ok' : 'bad'}">${t.lucro >= 0 ? '+' : ''}${num(Math.round(t.lucro))} ${moedaN(m)}</b><span>lucro se revender agora (já sem os 15%)</span></div>`).join('');
+  const ult = lista.slice().reverse().slice(0, 30).map((x) => `<div class="sn-l ${x.res === 'ganhou' ? 'ok' : 'sim'}"><span>${quando(x.t)}</span>${esc(x.nome)} ×${num(x.qtd)} por ${num(x.preco)} ${moedaN(x.moeda)}/un. (−${x.pct}% da ref. ${num(x.ref)})${x.vendedor ? ` · de ${esc(x.vendedor)}` : ''}</div>`).join('');
+  return per + (simul ? '<div class="res">Modo simular: estes são os que ele <b>teria</b> comprado.</div>' : '')
+    + `<div class="sn-cards">${cards}</div>`
+    + `<div class="hint" style="margin:6px 2px 2px">Tentativas no período: <b>${r.ganhou.length}</b> ganhas · <b>${r.perdeu.length}</b> sorteios perdidos${r.erro.length ? ` · <b>${r.erro.length}</b> com erro` : ''}${r.simulado.length && r.ganhou.length ? ` · ${r.simulado.length} simuladas` : ''}</div>`
+    + `<div class="sn-tab"><div class="sn-it sn-ith"><span>Item</span><span>Unid.</span><span>Paguei/un.</span><span>Vender a</span><span>Mínimo</span><span>Lucro</span><span></span></div>${linhasItem}</div>`
+    + `<div class="hint">"Vender a" = referência de agora (a menor entre as últimas vendas e a vitrine)${Object.keys(refAgora).length ? '' : '; * = referência na hora da compra'}. "Mínimo" = abaixo disso a venda dá prejuízo (a comissão de 15% sai de quem vende; item não paga diária).</div>`
+    + `<div class="sn-log">${ult}</div>`;
+}
+
 function mudarSniper(i, patch) {
   const c = cfgDe(i);
   c.sniper = { ...c.sniper, ...patch, moedas: { ...c.sniper.moedas, ...(patch.moedas || {}) } };
@@ -832,7 +886,7 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-sntab],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) { if (menu != null || painel) abrir({ menu: null, painel: null }); return; }
@@ -903,6 +957,9 @@ async function acaoClick(d, id, campos) {
     if (!ligada) { S[i].res = null; S[i].top = []; S[i].alerta = null; if (foco === i) foco = null; }
     renderTudo();
     toast(ligada ? 'Conta ligada' : 'Conta desligada: jogo fechado, RAM liberada');
+  } else if (d.sntab) {
+    snAba = d.sntab === 'compras' ? 'compras' : 'config';
+    ovSync();
   } else if (d.voltar) {
     foco = null; kkVer = null; painel = null; menu = null; twHover = null;
     renderTudo(); ovSync();
@@ -983,6 +1040,7 @@ function acaoChange(d, value, checked) {
     if (value === 'comprar') toast('Sniper vai COMPRAR de verdade (com a chave Automação ligada), dentro dos tetos');
   }
   else if (d.sndesc) mudarSniper(+d.sndesc, { desconto: Math.min(90, Math.max(1, Math.round(Number(value) || 30))) });
+  else if (d.snper) { snPeriodo = Number(value) || 0; ovSync(); }
   else if (d.snamostras) mudarSniper(+d.snamostras, { amostras: Math.min(10, Math.max(2, Math.round(Number(value) || 4))) });
   else if (d.snres) mudarSniper(+d.snres, { reservaGold: Math.max(0, Math.round(Number(value) || 0)) });
   else if (d.snalvo) {
@@ -1111,7 +1169,7 @@ app.kick.onAudio((m) => { KKSOM = m || {}; renderKickDock(); renderKkVer(); });
   ATT = est.att || null;
   renderAtt();
   // o que já chegou ao vivo (antes desta resposta) vale mais que o guardado
-  for (let i = 0; i < N; i++) S[i] = Object.assign({ snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, geo: est.stores[i].geo || null, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
+  for (let i = 0; i < N; i++) S[i] = Object.assign({ snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, geo: est.stores[i].geo || null, sniper: est.stores[i].sniper || null, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
   montar();
   renderTudo();
   JOGO = est.jogo || null;

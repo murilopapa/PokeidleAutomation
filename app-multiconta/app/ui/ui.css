@@ -375,3 +375,20 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .sn-or span,.sn-oh span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sn-or b{text-align:right;color:var(--muted)}
 .sn-or.bom b{color:var(--ok)}
+
+/* Sniper: abas e histórico de compras */
+.sn-abas{display:flex;gap:4px;margin:0 0 8px;border-bottom:1px solid var(--line)}
+.sn-abas button{all:unset;cursor:pointer;padding:5px 12px;font-size:12px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.sn-abas button.on{color:var(--fg);border-bottom-color:var(--accent)}
+.sn-abas button b{background:var(--ok);color:#06110c;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
+.sn-per{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:6px}
+.sn-per select{width:auto}
+.sn-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.sn-card{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.sn-card b{font-size:14px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sn-card span{font-size:10.5px;color:var(--muted)}
+.sn-card b.ok,.sn-it b.ok{color:var(--ok)}.sn-card b.bad,.sn-it b.bad{color:var(--bad)}
+.sn-tab{margin-top:6px;border:1px solid var(--line);border-radius:8px;font-size:11.5px;max-height:130px;overflow:auto}
+.sn-it{display:grid;grid-template-columns:minmax(0,2fr) repeat(5,minmax(0,1fr)) 46px;gap:8px;padding:3px 8px;border-top:1px solid var(--line);color:var(--mid);align-items:center}
+.sn-it span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sn-ith{border-top:0;position:sticky;top:0;background:var(--card);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}

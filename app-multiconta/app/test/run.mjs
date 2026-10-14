@@ -300,6 +300,14 @@ const comprasSn = mockOut.split('\n').filter((l) => l.startsWith('MERCADO compra
 const snLog2 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
 check('comprar: pediu só o anúncio barato e só depois de liberar', comprasSn.length === 1 && / 501 /.test(comprasSn[0]) && parseFloat(comprasSn[0].split('faltavam ')[1]) <= 0, comprasSn.join(" / "));
 check('comprar: entrou no sorteio e registrou a compra', snLog2.some((l) => /^sorteio:/.test(l)) && snLog2.some((l) => /^comprou: COMPROU: 1× Bicycle Fragment por 60 Gemas/.test(l)), JSON.stringify(snLog2.slice(-5)));
+// aba Compras: resumo do período, por item (pago, vender a, mínimo, lucro já sem os 15%)
+await ovClicar('[data-sntab="compras"]'); await sleep(700);
+const compTxt = (await ovTexto()).replace(/\s+/g, ' ');
+check('aba Compras: 1 compra, 60 Gemas, mínimo 71, lucro +20 se revender a 95', /1unidades/.test(compTxt) && /60 Gemasgasto/.test(compTxt) && /Bicycle Fragment1609571\+20Gemas/.test(compTxt) && /1 ganhas/.test(compTxt), compTxt.slice(0, 600));
+await shot('sniper-compras.png');
+const persistido = JSON.parse(fs.readFileSync(path.join(userData, "contas", `conta-${iSn + 1}.json`), "utf8"));
+check('histórico do sniper fica salvo no disco', (persistido.sniper?.hist ?? []).some((x) => x.res === 'ganhou' && x.qtd === 1 && x.preco === 60), JSON.stringify(persistido.sniper?.hist?.slice(-2)));
+await ovClicar('[data-sntab="config"]'); await sleep(300);
 // a chavinha do botão liga/desliga sem abrir o menu
 await ui.keyboard.press('Escape'); await sleep(300);
 const mapa0 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);

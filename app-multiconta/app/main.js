@@ -27,7 +27,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'pie', privileges: { standard: t
 
 // ------------------------------------------------------------------ armazenamento por conta
 const DIR = () => path.join(app.getPath('userData'), 'contas');
-const PERSISTE = ['cfg', 'medidas', 'log', 'zoom', 'desligada', 'nick'];
+const PERSISTE = ['cfg', 'medidas', 'log', 'zoom', 'desligada', 'nick', 'sniper']; // sniper: histórico de compras aparece mesmo com o jogo fechado
 const store = Array.from({ length: SLOTS }, () => ({}));
 const salvarTimer = {};
 function carregarStores() {
@@ -370,7 +370,7 @@ ipcMain.handle('ui:estado', () => ({
   zoomKick: Number(appCfg.zoomKick) || 1,
   modo: appCfg.modo ? modo() : null,
   att: atualizador?.estado() ?? null,
-  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, geo: s.geo ?? null, desligada: !!s.desligada, nick: s.nick ?? null })),
+  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, geo: s.geo ?? null, sniper: s.sniper ?? null, desligada: !!s.desligada, nick: s.nick ?? null })),
   twitch: twitch.estado(),
   kick: kick.estado(),
   jogo: jogo?.estado ?? null,
