@@ -149,12 +149,27 @@ wssJogo.on('connection', (ws) => {
         medias: { 2: { gold: { media: 10000, unidades: 20 } }, 3: { gold: { media: 5000, unidades: 2 } }, 4: { gold: { media: 1000, unidades: 50 } } } }));
     }
     if (m.t === 'market.item') {
-      ws.mercadoLib = Date.now() + 6000; // libera 6 s depois de cada consulta
+      ws.mercadoLib ??= Date.now() + 20000; // a retenção do anúncio 501 acaba 20 s depois da 1ª consulta
       const linhas = m.itemId === 2 ? [
         { id: 501, tipo: 'item', qtd: 3, preco: 6000, moeda: 'gold', vendedor: 'barateiro', compravelEm: ws.mercadoLib },
         { id: 502, tipo: 'item', qtd: 1, preco: 9000, moeda: 'gold', vendedor: 'caro', compravelEm: 0 },
+        { id: 503, tipo: 'item', qtd: 2, preco: 9500, moeda: 'gold', vendedor: 'outro', compravelEm: 0 },
+        { id: 504, tipo: 'item', qtd: 5, preco: 10000, moeda: 'gold', vendedor: 'outro2', compravelEm: 0 },
+      ] : m.itemId === 3 ? [
+        // Water Stone: anúncio sozinho e sem vendas recentes → sem referência, não compra
+        { id: 601, tipo: 'item', qtd: 1, preco: 1000, moeda: 'gold', vendedor: 'x', compravelEm: 0 },
       ] : [];
       ws.send(JSON.stringify({ t: 'market', aba: 'item', itemId: m.itemId, moeda: m.moeda, linhas }));
+    }
+    if (m.t === 'market.historicoGlobal') {
+      const linhas = m.itemId === 2 ? [
+        { tipo: 'item', descricao: '2× Fire Stone', bruto: 19600, moeda: 'gold', em: Date.now() - 6e5 },
+        { tipo: 'item', descricao: '1× Fire Stone', bruto: 9900, moeda: 'gold', em: Date.now() - 9e5 },
+        { tipo: 'item', descricao: '4× Fire Stone', bruto: 38800, moeda: 'gold', em: Date.now() - 2e6 },
+        { tipo: 'item', descricao: '1× Fire Stone', bruto: 9700, moeda: 'gold', em: Date.now() - 3e6 },
+        { tipo: 'item', descricao: '1× Fire Stone', bruto: 30000, moeda: 'gold', em: Date.now() - 9e6 }, // velha, fora das 4
+      ] : [];
+      ws.send(JSON.stringify({ t: 'market', aba: 'historicoGlobal', seq: m.seq, pagina: 0, linhas }));
     }
     if (m.t === 'market.comprar') {
       console.log('MERCADO compra', m.id, 'faltavam', (ws.mercadoLib || 0) - Date.now(), 'ms');

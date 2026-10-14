@@ -28,6 +28,8 @@ window.__PIE_PROTO = {
     // Mercado da Comunidade (as mesmas mensagens da tela do Mercado)
     mercadoItens: () => ({ t: 'market.itens', elemento: '', categoria: '' }),
     mercadoItem: (itemId, moeda) => ({ t: 'market.item', itemId, moeda }),
+    // últimas vendas de um item numa moeda (a "Tabela de preços" do jogo, filtrada)
+    mercadoHistorico: (itemId, moeda, seq) => ({ t: 'market.historicoGlobal', pagina: 0, seq, tipo: 'item', itemId, moeda }),
     mercadoComprar: (id, qtd, preco, moeda) => ({ t: 'market.comprar', id, qtd, preco, moeda }),
   },
 };

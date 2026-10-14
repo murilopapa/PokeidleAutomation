@@ -21,8 +21,8 @@ var PIE_DEFAULT_CFG = {
     modo: 'simular',               // 'simular' (só anota) | 'comprar' (precisa da chave geral também)
     categorias: ['stone', 'mega'], // categorias do Mercado (Pedras, Mega Stones…)
     itens: [],                     // se tiver algum, só estes itens (ignora categorias)
-    desconto: 30,                  // % abaixo da média dos últimos 7 dias
-    minVendas: 5,                  // unidades vendidas em 7 dias para confiar na média
+    desconto: 30,                  // % abaixo do preço de referência
+    amostras: 4,                   // referência = mediana das últimas N vendas e dos N outros anúncios mais baratos (a menor)
     reservaGold: 0,                // nunca deixar os Coins abaixo disto
     moedas: {
       gold: { on: true, tetoDia: 1000000 }, // teto de gasto em 24 h

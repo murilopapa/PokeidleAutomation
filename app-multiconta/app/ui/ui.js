@@ -206,10 +206,10 @@ function enviarLayout() {
   const rects = [];
   document.querySelectorAll('.slot').forEach((sl) => {
     const i = +sl.dataset.slot;
-    // conta expandida: as outras viram miniaturas AO VIVO na tira de baixo (nunca escondidas,
-    // senão o navegador pausa o jogo delas)
-    const mini = sl.getClientRects().length === 0;   // escondida (expandida outra conta, ou live da Kick aberta)
-    const g = mini ? document.querySelector(`.mini[data-mini="${i}"]`) : $('.game', sl);
+    // Conta expandida (ou live da Kick aberta): as outras saem da tela e viram só um rótulo na
+    // faixa de baixo. O jogo delas continua rodando por trás (como no Ultra eco), só não é desenhado.
+    if (sl.getClientRects().length === 0) return;
+    const g = $('.game', sl), mini = false;
     if (!g) return;
     const r = g.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
@@ -343,7 +343,7 @@ function renderKickDock() {
   const d = $('#kdock');
   const contas = S.map((s, i) => i).filter((i) => KK.contas[i]?.ligado && !S[i].desligada);
   d.classList.toggle('on', contas.length > 0);
-  d.classList.toggle('min', kdockMin);
+  d.classList.toggle('min', kdockMin || foco != null || !!kkVer); // tela cheia: a doca fica fina
   const html = contas.map((i) => {
     const k = KK.contas[i], jg = S[i].snap?.kick;
     const vendo = k.assistindo || [];
@@ -386,7 +386,7 @@ function menuHTML(i) {
 function barHTML(i) {
   const c = cfgDe(i), bola = regra(i, ID_BOLA), poc = regra(i, ID_POCAO);
   const nomeCurto = (r) => (r?.label || '').replace(/\s*(Ball|Potion)$/i, '') || '—';
-  const chip = (k, nome, on, res) => `<button class="am ${on ? 'on' : ''} ${c.enabled ? '' : 'desl'} ${painel?.i === i && painel.k === k ? 'open' : ''}" data-am="${i}|${k}"><i></i>${nome} <b>${on ? res : 'off'}</b>${ICON.car}</button>`;
+  const chip = (k, nome, on, res) => `<button class="am ${on ? 'on' : ''} ${c.enabled ? '' : 'desl'} ${painel?.i === i && painel.k === k ? 'open' : ''}" data-am="${i}|${k}"><i data-amt="${i}|${k}" title="${on ? 'Desligar' : 'Ligar'} (sem abrir o menu)"></i>${nome} <b>${on ? res : 'off'}</b>${ICON.car}</button>`;
   return `
     ${chip('bola', 'Bola', bola?.enabled, `${esc(nomeCurto(bola))} &lt; ${num(bola?.min ?? 0)}`)}
     ${chip('poc', 'Poção', poc?.enabled, `${esc(nomeCurto(poc))} &lt; ${num(poc?.min ?? 0)}`)}
@@ -443,8 +443,8 @@ function sniperHTML(i, sw, fechar) {
     ${outra >= 0 && !sn.enabled ? `<div class="res">O sniper está ligado em ${nomeConta(outra)}. Ligar aqui desliga lá (só uma conta caça por vez, para não disputar o mesmo anúncio).</div>` : ''}
     <div class="g4">
       <label class="field">Modo<select data-snmodo="${i}"><option value="simular" ${sn.modo !== 'comprar' ? 'selected' : ''}>Simular (só anota)</option><option value="comprar" ${sn.modo === 'comprar' ? 'selected' : ''}>Comprar</option></select></label>
-      <label class="field">% abaixo da média (7 dias)<input type="number" min="1" max="90" value="${sn.desconto}" data-sndesc="${i}"></label>
-      <label class="field">Mín. de vendas em 7 dias<input type="number" min="1" value="${sn.minVendas}" data-snmin="${i}"></label>
+      <label class="field" title="Quanto abaixo do preço de referência o anúncio tem de estar">% abaixo da referência<input type="number" min="1" max="90" value="${sn.desconto}" data-sndesc="${i}"></label>
+      <label class="field" title="Referência = a menor entre a mediana das últimas N vendas do item e a dos N outros anúncios mais baratos da vitrine">Comparar com os últimos<input type="number" min="2" max="10" value="${sn.amostras}" data-snamostras="${i}"></label>
       <label class="field">Reserva de Coins<input type="number" min="0" value="${sn.reservaGold}" data-snres="${i}"></label>
     </div>
     <div class="sn-cats">${ordem.length ? ordem.map((k) => chk(`data-sncat="${i}|${k}"`, sn.categorias.includes(k), `${CAT_MERCADO[k] || k} <small>${cats[k]}</small>`)).join('') : '<span class="hint" style="margin:0">Abra o jogo desta conta para listar as categorias.</span>'}</div>
@@ -452,7 +452,7 @@ function sniperHTML(i, sw, fechar) {
     ${sn.modo === 'comprar' && !c.enabled ? '<div class="res bad">A chave "Automação" desta conta está desligada: não compra nada (só simula) até ligar.</div>' : ''}
     <div class="sn-log">${log}</div>
     ${status ? `<div class="hint">${status}</div>` : ''}
-    <div class="hint">Compra quando um anúncio está a % escolhida abaixo do preço médio vendido nos últimos 7 dias (só com vendas suficientes). Todo anúncio novo fica retido alguns minutos; quando libera, o jogo sorteia entre quem pediu nos primeiros 3 s, e o sniper pede logo depois de liberar (nunca antes). Varre a vitrine a cada ~30 s.</div>`;
+    <div class="hint">Referência de cada item = a MENOR entre a mediana das últimas ${sn.amostras} vendas dele e a dos ${sn.amostras} outros anúncios mais baratos da vitrine agora. Só pega anúncio ${sn.desconto}% abaixo disso. Todo anúncio novo fica retido alguns minutos; quando libera, o jogo sorteia entre quem pediu nos primeiros 3 s, e o sniper pede logo depois de liberar (nunca antes). Varre a vitrine a cada ~30 s.</div>`;
 }
 function mudarSniper(i, patch) {
   const c = cfgDe(i);
@@ -522,14 +522,11 @@ function renderTopo() {
   const st = $('#strip');
   const comTira = foco != null || !!kkVer;
   st.classList.toggle('on', comTira);
-  // a tira mantém as miniaturas (onde as outras contas continuam rodando); só os rótulos mudam
+  // faixa fina: um rótulo por conta ligada (clique = expande ela); os jogos continuam rodando por trás
   if (!comTira) { if (st.innerHTML) st.innerHTML = ''; return; }
-  if (!st.children.length) st.innerHTML = S.map((s, i) => `<div class="th" data-thbox="${i}"><div class="th-h" data-th="${i}"></div><div class="mini" data-mini="${i}"></div></div>`).join('');
-  S.forEach((s, i) => {
-    const box = st.querySelector(`[data-thbox="${i}"]`);
-    box.classList.toggle('cur', foco === i);
-    box.querySelector('.th-h').innerHTML = `<span class="dot ${estadoPonto(i)}"></span><b>${nomeConta(i)}</b><span class="xp">${xphAgora(i) != null ? curto(xphAgora(i)) + '/h' : ''}</span>`;
-  });
+  const html = S.map((s, i) => (s.desligada ? '' : `<button class="th ${foco === i ? 'cur' : ''}" data-th="${i}" title="${foco === i ? 'Expandida acima' : 'Expandir esta conta'}"><span class="dot ${estadoPonto(i)}"></span><b>${nomeConta(i)}</b><span class="xp">${xphAgora(i) != null ? curto(xphAgora(i)) + '/h' : ''}</span></button>`)).join('')
+    + `<button class="th volta" data-voltar="1" title="Voltar para a grade (Esc)">▦ Grade</button>`;
+  if (st.dataset.h !== html) { st.innerHTML = html; st.dataset.h = html; }
 }
 // Contas desligadas saem da grade e as ligadas ganham o espaço (1, 2, 3 ou 4 quadrados).
 // Layouts prontos (como os do Windows), por número de contas ligadas. A ordem das contas vem do
@@ -828,7 +825,7 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) { if (menu != null || painel) abrir({ menu: null, painel: null }); return; }
@@ -899,6 +896,20 @@ async function acaoClick(d, id, campos) {
     if (!ligada) { S[i].res = null; S[i].top = []; S[i].alerta = null; if (foco === i) foco = null; }
     renderTudo();
     toast(ligada ? 'Conta ligada' : 'Conta desligada: jogo fechado, RAM liberada');
+  } else if (d.voltar) {
+    foco = null; kkVer = null; painel = null; menu = null; twHover = null;
+    renderTudo(); ovSync();
+  } else if (d.amt) {
+    // a bolinha do botão: liga/desliga direto
+    const [si, k] = d.amt.split('|'), i = +si;
+    if (k === 'mapa') { const c = cfgDe(i); c.autoHunt.enabled = !c.autoHunt.enabled; salvarCfg(i, c); toast(`Mapa ${c.autoHunt.enabled ? 'ligado' : 'desligado'}`); }
+    else if (k === 'sniper') { const on = !cfgDe(i).sniper.enabled; mudarSniper(i, { enabled: on }); toast(`Sniper ${on ? 'ligado' : 'desligado'}`); }
+    else {
+      const id = k === 'bola' ? ID_BOLA : ID_POCAO, on = !regra(i, id)?.enabled;
+      mudarRegra(i, id, k === 'bola' ? 'ball' : 'item', { enabled: on });
+      toast(`${k === 'bola' ? 'Compra de bola' : 'Compra de poção'} ${on ? 'ligada' : 'desligada'}`);
+    }
+    if (painel?.i === i) ovSync();
   } else if (d.am) {
     const [i, k] = d.am.split('|');
     abrir({ painel: painel?.i === +i && painel.k === k ? null : { i: +i, k }, menu: null, twHover: null });
@@ -965,7 +976,7 @@ function acaoChange(d, value, checked) {
     if (value === 'comprar') toast('Sniper vai COMPRAR de verdade (com a chave Automação ligada), dentro dos tetos');
   }
   else if (d.sndesc) mudarSniper(+d.sndesc, { desconto: Math.min(90, Math.max(1, Math.round(Number(value) || 30))) });
-  else if (d.snmin) mudarSniper(+d.snmin, { minVendas: Math.max(1, Math.round(Number(value) || 5)) });
+  else if (d.snamostras) mudarSniper(+d.snamostras, { amostras: Math.min(10, Math.max(2, Math.round(Number(value) || 4))) });
   else if (d.snres) mudarSniper(+d.snres, { reservaGold: Math.max(0, Math.round(Number(value) || 0)) });
   else if (d.sncat) {
     const [i, cat] = d.sncat.split('|'), atuais = cfgDe(+i).sniper.categorias;

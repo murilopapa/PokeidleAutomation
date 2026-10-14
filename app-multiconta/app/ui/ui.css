@@ -176,14 +176,12 @@ input[type=checkbox]{accent-color:var(--accent)}
 .menu .zoom button.on{border-color:var(--ok);color:var(--ok)}
 .menu .zoom b{color:var(--fg);min-width:38px;text-align:center}
 /* tira do modo expandido: miniaturas ao vivo das outras contas */
-.strip{height:170px}
-.strip .th{flex:1;display:flex;flex-direction:column;gap:6px;padding:6px;cursor:default;min-width:0}
-.strip .th-h{display:flex;align-items:center;gap:8px;cursor:pointer;padding:2px 4px;border-radius:6px}
-.strip .th-h:hover{background:var(--card2)}
-.strip .th .xp{margin-left:auto;color:var(--accent);font-size:12px;font-weight:700}
-.strip .mini{flex:1;align-self:stretch;border-radius:8px;background:var(--bg);overflow:hidden}
-.strip .th.cur .mini{display:flex;align-items:center;justify-content:center}
-.strip .th.cur .mini::after{content:'expandida acima';color:var(--muted);font-size:11px}
+.strip{height:auto;gap:6px;padding:0 10px 8px;flex-wrap:wrap}
+.strip .th{all:unset;flex:0 1 auto;display:flex;align-items:center;gap:7px;padding:4px 10px;background:var(--card);border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:12px;min-width:0}
+.strip .th:hover{border-color:var(--accent)}
+.strip .th.cur{border-color:var(--accent);background:var(--card2)}
+.strip .th .xp{margin-left:6px;color:var(--accent);font-size:11.5px;font-weight:700}
+.strip .th.volta{margin-left:auto;color:var(--muted)}
 /* conta desligada (botão power) */
 .ib.pw:hover{color:var(--bad)}
 .ib.pw.off{color:var(--ok)}
@@ -361,3 +359,11 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .sn-l.bad{color:var(--bad)}
 .sn-l.sim{color:var(--accent)}
 .sn-l.ag{color:var(--fg)}
+
+/* bolinha do botão de automação: clicável (liga/desliga sem abrir o menu) */
+.am i[data-amt]{position:relative;cursor:pointer;width:24px;height:13px;border-radius:7px;background:var(--line);box-shadow:none;transition:background .15s}
+.am i[data-amt]::after{content:'';position:absolute;top:2px;left:2px;width:9px;height:9px;border-radius:50%;background:var(--muted);transition:left .15s,background .15s}
+.am.on i[data-amt]{background:rgba(46,204,113,.35);box-shadow:none}
+.am.on i[data-amt]::after{left:13px;background:var(--ok)}
+.am i[data-amt]:hover{outline:1px solid var(--accent);outline-offset:1px}
+.am.desl.on i[data-amt]::after{background:var(--mid)}

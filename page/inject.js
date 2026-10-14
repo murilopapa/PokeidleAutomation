@@ -248,17 +248,15 @@
 
 
   // ------------------------------------------------------------ sniper do Mercado (itens)
-  // Lê o resumo da vitrine de itens (menor preço de cada item + média vendida em 7 dias, numa
-  // mensagem só) a cada ~30 s. Item da categoria escolhida com anúncio X% abaixo da média abre a
-  // lista daquele item e, para cada anúncio barato, entra no sorteio da liberação: o jogo segura
+  // Lê o resumo da vitrine de itens (menor preço e nº de anúncios de cada item, numa mensagem só)
+  // a cada ~30 s. Item da categoria escolhida que mudou (anúncio novo ou mais barato) é olhado de
+  // perto: as últimas N vendas dele e os outros anúncios da vitrine. Anúncio X% abaixo dos DOIS
+  // (a menor das duas medianas) entra no sorteio da liberação: o jogo segura
   // todo anúncio novo por alguns minutos (retenção) e, quando libera, sorteia entre quem pediu nos
   // primeiros 3 s. O pedido sai DEPOIS da liberação, pelo relógio do servidor — nunca antes (isso
   // seria furar a trava, e os Termos proíbem). Em "simular" só anota o que teria comprado.
   const SN = {
     proxVarredura: 0,
-    pedidosItem: new Map(),   // `${itemId}:${moeda}` -> último pedido (ms)
-    filaItem: [],             // [{ itemId, moeda, limite, ref }]
-    ultimoPedidoItem: 0,
     vistos: new Map(),        // anúncio id -> quando foi tratado
     agendados: new Map(),     // anúncio id -> timer
     pendentes: [],            // compras enviadas esperando o resultado
@@ -324,7 +322,7 @@
     const modo = snLigado() ? snCfg().modo : null;
     if (modo !== snModoAntes) {
       for (const [id, v] of SN.vistos) if (v.modo !== 'comprar') SN.vistos.delete(id);
-      SN.pedidosItem.clear();
+      SN.assinatura.clear();
       if (modo) SN.proxVarredura = Date.now() + 1500;
       snModoAntes = modo;
     }
@@ -332,7 +330,8 @@
       for (const t of SN.agendados.values()) clearTimeout(t);
       if (SN.agendados.size) snLog('info', 'sniper desligado: compras agendadas canceladas');
       SN.agendados.clear();
-      SN.filaItem = [];
+      SN.fila = [];
+      SN.assinatura.clear();
     } else if (!SN.status.ultimaVarredura) SN.proxVarredura = Date.now() + 2000;
     snPublicar();
   }
@@ -344,13 +343,15 @@
         SN.proxVarredura = agora + 25000 + Math.random() * 10000; // ~30 s, irregular
         if (sendGame(P.out.mercadoItens())) { SN.status.varreduras++; SN.status.ultimaVarredura = agora; }
       }
-      // no máximo um pedido de lista de item a cada ~1,5 s
-      if (SN.filaItem.length && agora - SN.ultimoPedidoItem > 1500) {
-        const x = SN.filaItem.shift();
-        SN.ultimoPedidoItem = agora;
-        SN.pedidosItem.set(`${x.itemId}:${x.moeda}`, agora);
-        SN.limites.set(`${x.itemId}:${x.moeda}`, x);
-        sendGame(P.out.mercadoItem(x.itemId, x.moeda));
+      // no máximo um pedido (histórico ou lista de um item) a cada ~1,5 s
+      if (SN.fila.length && agora - SN.ultimoPedido > 1500) {
+        const x = SN.fila.shift();
+        SN.ultimoPedido = agora;
+        if (x.tipo === 'hist') {
+          const seq = ++SN.seq;
+          SN.seqs.set(seq, x);
+          sendGame(P.out.mercadoHistorico(x.itemId, x.moeda, seq));
+        } else sendGame(P.out.mercadoItem(x.itemId, x.moeda));
       }
     }
     // resultados que nunca chegaram
@@ -362,48 +363,81 @@
     });
     setTimeout(sniperTick, 500);
   }
-  SN.limites = new Map();
+  SN.fila = [];            // [{ tipo: 'hist' | 'item', itemId, moeda }]
+  SN.ultimoPedido = 0;
+  SN.assinatura = new Map(); // `${itemId}:${moeda}` -> 'menor|anúncios' da última varredura
+  SN.hist = new Map();       // `${itemId}:${moeda}` -> { t, precos: [unitários, do mais recente] }
+  SN.seqs = new Map();       // seq do pedido de histórico -> { itemId, moeda }
+  SN.seq = 900000;           // seqs altos: a tela do Mercado do jogo ignora estas respostas
+  const mediana = (xs) => { const v = xs.slice().sort((a, b) => a - b); const k = v.length >> 1; return v.length % 2 ? v[k] : (v[k - 1] + v[k]) / 2; };
+  const qtdDaVenda = (l) => Number(l.qtd) || Number(String(l.descricao ?? '').match(/^\s*(\d+)\s*[×x]/i)?.[1]) || 1;
+
+  function snEnfileirar(tipo, itemId, moeda) {
+    if (!SN.fila.some((x) => x.tipo === tipo && x.itemId === itemId && x.moeda === moeda)) SN.fila.push({ tipo, itemId, moeda });
+  }
 
   function sniperMercado(m) {
     if (!snLigado()) return;
+    const c = snCfg();
+    // 1) a vitrine de itens mudou (anúncio novo, mais barato, vendido): olha aquele item de perto
     if (m.aba === 'itens' && m.resumo) {
-      const c = snCfg();
-      const desconto = Math.min(90, Math.max(1, Number(c.desconto) || 30)) / 100;
-      const minVendas = Math.max(1, Number(c.minVendas) || 5);
-      let cand = 0;
+      let olhar = 0;
       for (const [k, r] of Object.entries(m.resumo)) {
         const id = Number(k);
-        if (!r?.anuncios || !snItemValido(id)) continue;
+        if (!snItemValido(id)) continue;
         for (const moeda of ['gold', 'orb']) {
           if (!c.moedas?.[moeda]?.on) continue;
-          const menor = moeda === 'orb' ? r.minOrb : r.minGold;
-          const ref = m.medias?.[id]?.[moeda];
-          if (menor == null || !ref?.media || (ref.unidades ?? 0) < minVendas) continue;
-          const limite = Math.floor(ref.media * (1 - desconto));
-          if (menor > limite) continue;
-          cand++;
           const chave = `${id}:${moeda}`;
-          if (Date.now() - (SN.pedidosItem.get(chave) || 0) < 20000) continue;
-          if (!SN.filaItem.some((x) => x.itemId === id && x.moeda === moeda)) SN.filaItem.push({ itemId: id, moeda, limite, ref: ref.media });
+          const menor = moeda === 'orb' ? r?.minOrb : r?.minGold;
+          if (!r?.anuncios || menor == null) { SN.assinatura.delete(chave); continue; }
+          const ass = `${menor}|${r.anuncios}|${r.unidades}`;
+          if (SN.assinatura.get(chave) === ass) continue;
+          SN.assinatura.set(chave, ass);
+          olhar++;
+          if (Date.now() - (SN.hist.get(chave)?.t || 0) > 10 * 60 * 1000) snEnfileirar('hist', id, moeda);
+          snEnfileirar('item', id, moeda);
         }
       }
-      SN.status.candidatos = cand;
+      SN.status.candidatos = olhar;
       snPublicar();
       return;
     }
+    // 2) últimas vendas daquele item, naquela moeda
+    if (m.aba === 'historicoGlobal' && SN.seqs.has(m.seq)) {
+      const x = SN.seqs.get(m.seq);
+      SN.seqs.delete(m.seq);
+      const precos = (m.linhas ?? [])
+        .filter((l) => (!l.tipo || l.tipo === 'item') && (!l.moeda || l.moeda === x.moeda) && Number(l.bruto) > 0)
+        .map((l) => Number(l.bruto) / qtdDaVenda(l));
+      SN.hist.set(`${x.itemId}:${x.moeda}`, { t: Date.now(), precos });
+      return;
+    }
+    // 3) os anúncios do item: compara cada um dos mais baratos com as últimas vendas e com o resto da vitrine
     if (m.aba === 'item' && Array.isArray(m.linhas)) {
-      const x = SN.limites.get(`${m.itemId}:${m.moeda}`);
-      if (!x) return;
+      const moeda = m.moeda;
+      if (!c.moedas?.[moeda]?.on || !snItemValido(m.itemId)) return;
+      const n = Math.min(10, Math.max(2, Number(c.amostras) || 4));
+      const desconto = Math.min(90, Math.max(1, Number(c.desconto) || 30)) / 100;
       const nome = nomeItemSn(m.itemId);
-      for (const a of m.linhas) {
-        if (!a?.id || !(a.preco <= x.limite) || SN.vistos.has(a.id)) continue;
+      const vendas = (SN.hist.get(`${m.itemId}:${moeda}`)?.precos ?? []).slice(0, n);
+      const medVen = vendas.length >= 2 ? mediana(vendas) : null;
+      const linhas = m.linhas.filter((a) => a?.id && a.preco > 0).sort((a, b) => a.preco - b.preco);
+      for (const a of linhas.slice(0, 3)) {
+        if (SN.vistos.has(a.id)) continue;
         if (a.vendedor && S.eu?.nick && a.vendedor === S.eu.nick) continue;
+        const outros = linhas.filter((b) => b.id !== a.id).slice(0, n).map((b) => b.preco);
+        const medVit = outros.length >= 2 ? mediana(outros) : null;
+        const refs = [medVen, medVit].filter((v) => v != null);
+        if (!refs.length) continue; // sem vendas recentes nem outros anúncios: não dá pra saber se é barato
+        const ref = Math.min(...refs);
+        if (a.preco > ref * (1 - desconto)) continue;
         SN.vistos.set(a.id, { t: Date.now(), modo: snCompra() ? 'comprar' : 'simular' });
-        const pct = Math.round((1 - a.preco / x.ref) * 100);
-        const base = { id: a.id, itemId: m.itemId, nome, moeda: a.moeda || m.moeda, preco: a.preco, qtdAnuncio: a.qtd, vendedor: a.vendedor, ref: Math.round(x.ref), pct };
+        const pct = Math.round((1 - a.preco / ref) * 100);
+        const base = { id: a.id, itemId: m.itemId, nome, moeda: a.moeda || moeda, preco: a.preco, qtdAnuncio: a.qtd, vendedor: a.vendedor, ref: Math.round(ref), pct };
         const libera = Number(a.compravelEm) || 0;
         const quando = libera > agoraSrv() ? `libera em ${Math.ceil((libera - agoraSrv()) / 1000)} s` : 'já liberado';
-        const resumo = `${nome} ×${a.qtd} por ${fmtN(a.preco)} ${moedaTxt(base.moeda)}/un. (média ${fmtN(x.ref)}, ${pct}% abaixo) · ${quando}`;
+        const comp = [medVen != null ? `últimas ${vendas.length} vendas ${fmtN(medVen)}` : 'sem vendas recentes', medVit != null ? `vitrine ${fmtN(medVit)}` : 'sem outros anúncios'].join(' · ');
+        const resumo = `${nome} ×${a.qtd} por ${fmtN(a.preco)} ${moedaTxt(base.moeda)}/un. — ${pct}% abaixo (${comp}) · ${quando}`;
         if (!snCompra()) { snLog('simulado', `teria comprado: ${resumo}`, base); continue; }
         const qtd = snCabe(base.moeda, a.preco, a.qtd);
         if (qtd < 1) { snLog('pulado', `sem teto/saldo para: ${resumo}`, base); continue; }
@@ -453,7 +487,7 @@
   function sniperComprou(ev) {
     if (!SN.pendentes.length) return;
     const p = SN.pendentes.shift();
-    snLog('comprou', `COMPROU: ${ev.descricao || p.nome} por ${fmtN(p.valor)} ${moedaTxt(p.moeda)} (média ${fmtN(p.ref)}, ${p.pct}% abaixo)`, p);
+    snLog('comprou', `COMPROU: ${ev.descricao || p.nome} por ${fmtN(p.valor)} ${moedaTxt(p.moeda)} (referência ${fmtN(p.ref)}/un., ${p.pct}% abaixo)`, p);
   }
   setTimeout(sniperTick, 3000);
 

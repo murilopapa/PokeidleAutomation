@@ -58,6 +58,10 @@ const ovJs = (js) => eapp.evaluate(({ webContents }, js) => webContents.getAllWe
 const ovTexto = () => ovJs('document.getElementById("ov").textContent');
 const ovMudar = (sel, valor) => ovJs(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); e.value = ${JSON.stringify(valor)}; e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 const ovClicar = (sel) => ovJs(`document.querySelector(${JSON.stringify(sel)}).click()`);
+// os jogos seguem rodando mesmo escondidos (timers e WebSocket): conta 5 voltas de um timer de 100 ms
+const jogosRodando = () => eapp.evaluate(async ({ webContents }) => Promise.all(webContents.getAllWebContents().filter((w) => w.getURL().includes('8787/app')).map((w) => w.executeJavaScript('new Promise((r) => { let n = 0; const t = setInterval(() => { if (++n === 5) { clearInterval(t); r(n); } }, 100); setTimeout(() => r(n), 3000); })'))));
+// quais views de jogo o app está desenhando (setVisible) — o visibilityState não muda sem tela de verdade
+const viewsDesenhadas = () => eapp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.filter((v) => v.webContents.getURL().includes('8787/app')).map((v) => v.getVisible()));
 const jogosVisiveis = () => eapp.evaluate(async ({ webContents }) => Promise.all(webContents.getAllWebContents().filter((w) => w.getURL().includes('8787/app')).map((w) => w.executeJavaScript('document.visibilityState'))));
 
 await ui.click('.slot[data-slot="0"] [data-am="0|bola"]');
@@ -113,7 +117,9 @@ await ui.click('.slot[data-slot="2"] [data-max="2"]');
 await sleep(1200);
 const vis = await ui.$$eval('.slot', (e) => e.filter((x) => getComputedStyle(x).display !== 'none').length);
 check('expandir mostra uma conta só', vis === 1);
-check('as outras contas continuam rodando (miniaturas)', (await jogosVisiveis()).every((v) => v === 'visible'), JSON.stringify(await jogosVisiveis()));
+const visExp = await viewsDesenhadas(), rodExp = await jogosRodando();
+check('expandida: só ela desenhada, as outras escondidas mas rodando', visExp.filter(Boolean).length === 1 && rodExp.every((n) => n === 5), JSON.stringify([visExp, rodExp]));
+check('faixa de baixo fina, com um rótulo por conta', (await ui.$eval('#strip', (e) => e.getBoundingClientRect().height)) < 50 && (await ui.$$('#strip .th[data-th]')).length === 4, String(await ui.$eval('#strip', (e) => e.getBoundingClientRect().height)));
 await shot('expandido.png');
 await ui.keyboard.press('Escape');
 await sleep(500);
@@ -217,7 +223,7 @@ await ui.click(`[data-kkver="${iK}|faasii"]`);
 await sleep(1500);
 const grande = await eapp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.map((v) => ({ url: v.webContents.getURL(), b: v.getBounds(), vis: v.getVisible() })).find((x) => x.url.includes('/kick/faasii')));
 check('clique na live: o mesmo player cresce no lugar da grade', grande && grande.vis && grande.b.width > 1000, JSON.stringify(grande));
-check('as contas continuam rodando (miniaturas) com a live aberta', (await jogosVisiveis()).every((v) => v === 'visible'), JSON.stringify(await jogosVisiveis()));
+check('com a live aberta as contas seguem rodando escondidas', (await jogosRodando()).every((n) => n === 5), JSON.stringify(await jogosRodando()));
 const mutadoAntes = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes('/kick/faasii'))?.executeJavaScript('document.getElementById("vv").muted'));
 await ui.click('#kkpainel [data-kksom]');
 await sleep(600);
@@ -281,16 +287,25 @@ await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sle
 check('painel do sniper abre com as categorias do Mercado', /Pedras/.test(await ovTexto()) && /Mega Stones/.test(await ovTexto()), (await ovTexto()).replace(/\s+/g, ' ').slice(0, 300));
 await ovClicar(`[data-snon="${iSn}"]`); await sleep(8000);
 const snLog1 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
-check('simular: anota a Fire Stone barata e ignora o resto', snLog1.some((l) => /^simulado: teria comprado: Fire Stone ×3 por 6\.000/.test(l)) && !snLog1.some((l) => /Water|Air|9\.000/.test(l)) && !/MERCADO compra/.test(mockOut), JSON.stringify(snLog1));
+check('simular: anota a Fire Stone barata (vs últimas vendas e vitrine) e ignora o resto', snLog1.some((l) => /^simulado: teria comprado: Fire Stone ×3 por 6\.000 Coins\/un\. — 37% abaixo \(últimas 4 vendas 9\.750 · vitrine 9\.500\)/.test(l)) && !snLog1.some((l) => /Water|Air|9\.000 Coins/.test(l)) && !/MERCADO compra/.test(mockOut), JSON.stringify(snLog1));
 await shot('sniper-simular.png');
 // modo comprar (com a chave Automação da conta ligada)
 if (!(await ui.isChecked(`[data-master="${iSn}"]`))) await ui.click(`.slot[data-slot="${iSn}"] .bar label.sw`);
 await ui.evaluate((i) => { mudarSniper(i, { modo: 'comprar' }); }, iSn);
-await sleep(16000);
+await sleep(28000);
 const comprasSn = mockOut.split('\n').filter((l) => l.startsWith('MERCADO compra'));
 const snLog2 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
 check('comprar: pediu só o anúncio barato e só depois de liberar', comprasSn.length === 1 && / 501 /.test(comprasSn[0]) && parseFloat(comprasSn[0].split('faltavam ')[1]) <= 0, comprasSn.join(" / "));
 check('comprar: entrou no sorteio e registrou a compra', snLog2.some((l) => /^sorteio:/.test(l)) && snLog2.some((l) => /^comprou: COMPROU: 3× Fire Stone por 18\.000 Coins/.test(l)), JSON.stringify(snLog2.slice(-5)));
+// a chavinha do botão liga/desliga sem abrir o menu
+await ui.keyboard.press('Escape'); await sleep(300);
+const mapa0 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
+await ui.click(`.slot[data-slot="${iSn}"] [data-amt="${iSn}|mapa"]`); await sleep(400);
+const mapa1 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
+await ui.click(`.slot[data-slot="${iSn}"] [data-amt="${iSn}|mapa"]`); await sleep(400);
+const mapa2 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
+check('chavinha no botão liga e desliga sem abrir o menu', mapa1 === !mapa0 && mapa2 === mapa0 && !(await ovTexto()).trim(), JSON.stringify([mapa0, mapa1, mapa2]));
+await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sleep(800);
 check('gasto do dia contado', (await ui.evaluate((i) => S[i].sniper?.gasto?.gold, iSn)) === 18000);
 // só uma conta caça por vez
 const outraSn = (iSn + 1) % 4;
@@ -347,8 +362,8 @@ const ecoOn = await jogosJs("document.documentElement.classList.contains('modo-e
 check('Eco liga o Modo Economia nas 4 contas', ecoOn.length === 4 && ecoOn.every(Boolean), JSON.stringify(ecoOn));
 check('botão Eco marcado', await ui.$eval('#modos [data-modo="eco"]', (e) => e.classList.contains('on')));
 await ui.click('[data-modo="ultra"]'); await sleep(1500);
-const visU = await jogosJs('document.visibilityState');
-check('Ultra eco: jogos não são desenhados (views escondidas)', visU.every((v) => v === 'hidden'), JSON.stringify(visU));
+const visU = await viewsDesenhadas();
+check('Ultra eco: jogos não são desenhados (views escondidas)', visU.every((v) => !v), JSON.stringify(visU));
 const ecoU = await jogosJs("document.documentElement.classList.contains('modo-economia')");
 check('Ultra eco mantém o Modo Economia', ecoU.every(Boolean));
 const linhasU = await ui.$$eval('#ultra .u-l:not(.u-cab)', (e) => e.map((x) => x.textContent));
@@ -366,11 +381,11 @@ await shot('ultra.png');
 // recarregar uma conta em Ultra continua escondida e em economia
 await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes('8787/app')).reload());
 await sleep(2500);
-const visR = await jogosJs('document.visibilityState');
-check('conta recarregada em Ultra continua escondida', visR.every((v) => v === 'hidden'), JSON.stringify(visR));
+const visR = await viewsDesenhadas();
+check('conta recarregada em Ultra continua escondida', visR.every((v) => !v), JSON.stringify(visR));
 await ui.click('#ultra [data-modo="normal"]'); await sleep(1500);
 const ecoN = await jogosJs("document.documentElement.classList.contains('modo-economia')");
-const visN = await jogosJs('document.visibilityState');
+const visN = (await viewsDesenhadas()).map((v) => (v ? 'visible' : 'hidden'));
 check('Normal desliga o Modo Economia em todas', ecoN.every((x) => x === false), JSON.stringify(ecoN));
 check('Normal mostra os jogos de novo', visN.every((v) => v === 'visible'), JSON.stringify(visN));
 await sleep(300);
