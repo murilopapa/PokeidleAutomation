@@ -283,7 +283,8 @@
     if (snPubTimer) return;
     snPubTimer = setTimeout(() => {
       snPubTimer = null;
-      post('sniper', { sniper: { at: Date.now(), ...SN.status, gasto: snGastoDia(), agendados: SN.agendados.size, log: SN.log.slice(-40) } });
+      const olhados = [...SN.olhados.values()].sort((a, b) => b.pct - a.pct).slice(0, 12);
+      post('sniper', { sniper: { at: Date.now(), ...SN.status, gasto: snGastoDia(), agendados: SN.agendados.size, olhados, log: SN.log.slice(-40) } });
     }, 500);
   }
   function snGastoDia() {
@@ -347,6 +348,7 @@
       if (SN.fila.length && agora - SN.ultimoPedido > 1500) {
         const x = SN.fila.shift();
         SN.ultimoPedido = agora;
+        SN.status.pedidos = (SN.status.pedidos || 0) + 1;
         if (x.tipo === 'hist') {
           const seq = ++SN.seq;
           SN.seqs.set(seq, x);
@@ -364,6 +366,7 @@
     setTimeout(sniperTick, 500);
   }
   SN.fila = [];            // [{ tipo: 'hist' | 'item', itemId, moeda }]
+  SN.olhados = new Map();  // `${itemId}:${moeda}` -> a última conta feita para o item (o painel mostra)
   SN.ultimoPedido = 0;
   SN.assinatura = new Map(); // `${itemId}:${moeda}` -> 'menor|anúncios' da última varredura
   SN.hist = new Map();       // `${itemId}:${moeda}` -> { t, precos: [unitários, do mais recente] }
@@ -422,6 +425,15 @@
       const vendas = (SN.hist.get(`${m.itemId}:${moeda}`)?.precos ?? []).slice(0, n);
       const medVen = vendas.length >= 2 ? mediana(vendas) : null;
       const linhas = m.linhas.filter((a) => a?.id && a.preco > 0).sort((a, b) => a.preco - b.preco);
+      SN.status.respostas = (SN.status.respostas || 0) + 1;
+      // a conta do mais barato vai para o painel ("Olhados agora"), comprando ou não
+      if (linhas[0]) {
+        const a0 = linhas[0], out0 = linhas.slice(1, n + 1).map((b) => b.preco);
+        const mv = out0.length >= 2 ? mediana(out0) : null;
+        const r0 = [medVen, mv].filter((v) => v != null);
+        const ref0 = r0.length ? Math.min(...r0) : null;
+        SN.olhados.set(`${m.itemId}:${moeda}`, { t: Date.now(), nome, moeda, menor: a0.preco, qtd: a0.qtd, medVen, nVen: vendas.length, medVit: mv, ref: ref0, pct: ref0 ? Math.round((1 - a0.preco / ref0) * 100) : -999 });
+      } else SN.olhados.delete(`${m.itemId}:${moeda}`);
       for (const a of linhas.slice(0, 3)) {
         if (SN.vistos.has(a.id)) continue;
         if (a.vendedor && S.eu?.nick && a.vendedor === S.eu.nick) continue;
@@ -470,7 +482,12 @@
 
   function sniperErro(m) {
     const ch = String(m.chave || '');
-    if (!ch.startsWith('market.') || !SN.pendentes.length) return;
+    // recusa logo depois de um pedido nosso (lista/histórico): mostra no painel em vez de sumir
+    if (!SN.pendentes.length) {
+      if (snLigado() && Date.now() - SN.ultimoPedido < 4000) snLog('erro', `o jogo respondeu: ${m.msg || ch || 'erro'}`);
+      return;
+    }
+    if (!ch.startsWith('market.')) return;
     const p = SN.pendentes[0];
     if (ch === 'market.sorteio' || ch === 'market.sorteioEspera') { snLog('sorteio', `${p.nome}: entrou no sorteio da liberação`); return; }
     SN.pendentes.shift();

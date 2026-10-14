@@ -437,8 +437,10 @@ function sniperHTML(i, sw, fechar) {
       <label class="sn-teto">teto 24 h <input type="number" min="0" value="${sn.moedas[m].tetoDia}" data-snteto="${i}|${m}"></label>
       <span class="sn-gasto">gasto <b>${num(gasto[m] || 0)}</b></span></div>`;
   const log = (st?.log ?? []).slice().reverse().slice(0, 14).map((l) => `<div class="sn-l ${SN_COR[l.tipo] || ''}"><span>${hora(l.t)}</span>${esc(l.texto)}</div>`).join('')
-    || `<div class="hint" style="margin:4px">${sn.enabled ? 'Procurando… a 1ª varredura sai em segundos.' : 'Ligue para começar a procurar.'}</div>`;
-  const status = st?.ultimaVarredura ? `Última varredura ${hora(st.ultimaVarredura)} · ${st.varreduras} no total · ${st.candidatos} item(ns) abaixo do limite agora${st.agendados ? ` · <b>${st.agendados} compra(s) agendada(s)</b>` : ''}` : '';
+    || `<div class="hint" style="margin:4px">${!sn.enabled ? 'Ligue para começar a procurar.' : st?.varreduras ? `Nenhum anúncio ${sn.desconto}% abaixo da referência ainda. Veja em "Olhados agora" quanto falta em cada item.` : 'Procurando… a 1ª varredura sai em segundos.'}</div>`;
+  const olh = st?.olhados ?? [];
+  const tabela = olh.length ? `<div class="sn-olh"><div class="sn-oh"><span>Olhados agora (o mais barato de cada item)</span><span>preço</span><span>últimas vendas</span><span>vitrine</span><span>abaixo</span></div>${olh.map((o) => `<div class="sn-or ${o.pct >= sn.desconto ? 'bom' : ''}"><span>${esc(o.nome)}${o.moeda === 'orb' ? ' <small>Gemas</small>' : ''}</span><span>${num(o.menor)}</span><span>${o.medVen != null ? num(o.medVen) : '—'}</span><span>${o.medVit != null ? num(o.medVit) : '—'}</span><b>${o.ref ? (o.pct > 0 ? `−${o.pct}%` : `+${-o.pct}%`) : 'sem ref.'}</b></div>`).join('')}</div>` : '';
+  const status = st?.ultimaVarredura ? `Última varredura ${hora(st.ultimaVarredura)} · ${st.varreduras} varreduras · ${st.candidatos} item(ns) mudaram na última · ${st.respostas || 0} listas de item lidas${st.agendados ? ` · <b>${st.agendados} compra(s) agendada(s)</b>` : ''}` : '';
   return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>
     ${outra >= 0 && !sn.enabled ? `<div class="res">O sniper está ligado em ${nomeConta(outra)}. Ligar aqui desliga lá (só uma conta caça por vez, para não disputar o mesmo anúncio).</div>` : ''}
     <div class="g4">
@@ -450,6 +452,7 @@ function sniperHTML(i, sw, fechar) {
     <div class="sn-cats">${ordem.length ? ordem.map((k) => chk(`data-sncat="${i}|${k}"`, sn.categorias.includes(k), `${CAT_MERCADO[k] || k} <small>${cats[k]}</small>`)).join('') : '<span class="hint" style="margin:0">Abra o jogo desta conta para listar as categorias.</span>'}</div>
     <div class="sn-moedas">${moeda('gold', 'Coins')}${moeda('orb', 'Gemas <small>(dinheiro real)</small>')}</div>
     ${sn.modo === 'comprar' && !c.enabled ? '<div class="res bad">A chave "Automação" desta conta está desligada: não compra nada (só simula) até ligar.</div>' : ''}
+    ${tabela}
     <div class="sn-log">${log}</div>
     ${status ? `<div class="hint">${status}</div>` : ''}
     <div class="hint">Referência de cada item = a MENOR entre a mediana das últimas ${sn.amostras} vendas dele e a dos ${sn.amostras} outros anúncios mais baratos da vitrine agora. Só pega anúncio ${sn.desconto}% abaixo disso. Todo anúncio novo fica retido alguns minutos; quando libera, o jogo sorteia entre quem pediu nos primeiros 3 s, e o sniper pede logo depois de liberar (nunca antes). Varre a vitrine a cada ~30 s.</div>`;

@@ -319,6 +319,9 @@ ipcMain.on('ui:layout', (_e, rects) => {
   // Nunca esconde um jogo que está na tela: view escondida = página "oculta" = o navegador pausa o jogo.
   for (let i = 0; i < SLOTS; i++) {
     visivel[i] = dentro.has(i);
+    // conta fora da tela (outra expandida, live grande aberta): o menu dela não pode ficar boiando
+    // na posição antiga, tampando e roubando cliques
+    if (!visivel[i] && limites[i]) limites[i] = { ...limites[i], oculto: true };
     views[i]?.setVisible(visivel[i] && modo() !== 'ultra');
     for (const [canal, v] of kickViews[i]) {
       const chave = i + '|' + canal;
@@ -333,7 +336,7 @@ ipcMain.on('ui:layout', (_e, rects) => {
 function posicionarOverlay() {
   if (!ov) return;
   const b = ovSlot != null ? limites[ovSlot] : null;
-  if (!b || b.mini || modo() === 'ultra') { ov.setVisible(false); return; }
+  if (!b || b.mini || b.oculto || modo() === 'ultra') { ov.setVisible(false); return; }
   ov.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height });
   ov.setVisible(true);
 }
