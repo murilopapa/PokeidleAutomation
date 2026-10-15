@@ -126,6 +126,7 @@
       publish(true);
     } else if (m.t === P.in.estado && S.mesclar) {
       S.eu = S.mesclar(m.estado);
+      snConferirPendentes();
       trackUsage();
       publish();
     } else if (m.t === P.in.campoInit) {
@@ -382,11 +383,15 @@
         } else sendGame(P.out.mercadoItem(x.itemId, x.moeda));
       }
     }
-    // resultados que nunca chegaram
+    // resultados que nunca chegaram: confere a bolsa e o saldo antes de dar por perdido
+    snConferirPendentes();
     SN.pendentes = SN.pendentes.filter((p) => {
       if (agora - p.t < 30000) return true;
       snLiberar(p);
-      snLog('erro', `${p.nome}: sem resposta do jogo, considerado não comprado`);
+      const e = S.eu || {};
+      const gastou = p.moeda === 'orb' ? (p.antes.orbs - (Number(e.orbs) || 0)) : null;
+      snLog('erro', `${p.nome}: o jogo não respondeu em 30 s. Conferi: ${p.moeda === 'orb' ? `Gemas ${fmtN(p.antes.orbs)} → ${fmtN(Number(e.orbs) || 0)}` : 'Coins mudam com a caça'}, ${p.nome} na bolsa ${fmtN(p.antes.item)} → ${fmtN(Number(e.items?.[p.itemId]) || 0)}. Não comprou.${gastou > 0 ? ' (as Gemas baixaram por outro motivo)' : ''}`);
+      snRegistrar('erro', p, { motivo: 'sem resposta do jogo (bolsa e saldo não mudaram)' });
       return false;
     });
     setTimeout(sniperTick, 500);
@@ -495,7 +500,8 @@
     const qtd = snCabe(c.moeda, c.preco, c.qtd);
     if (qtd < 1) { snLog('pulado', `${c.nome} por ${fmtN(c.preco)} ${moedaTxt(c.moeda)}: não comprei, ${snPorque(c.moeda, c.preco)}`); return; }
     if (!sendGame(P.out.mercadoComprar(c.id, qtd, c.preco, c.moeda))) { snLog('erro', `${c.nome}: jogo desconectado`); return; }
-    const p = { ...c, qtd, t: Date.now(), valor: qtd * c.preco };
+    // foto do saldo e da bolsa antes: é como a compra é confirmada se o evento do jogo não vier
+    const p = { ...c, qtd, t: Date.now(), valor: qtd * c.preco, antes: { orbs: Number(S.eu?.orbs) || 0, gold: Number(S.eu?.gold) || 0, item: Number(S.eu?.items?.[c.itemId]) || 0 } };
     snGastos.push({ t: Date.now(), moeda: c.moeda, valor: p.valor, id: c.id }); // reserva; devolve se perder
     snGravarGastos();
     SN.pendentes.push(p);
@@ -513,8 +519,12 @@
       if (snLigado() && Date.now() - SN.ultimoPedido < 4000) snLog('erro', `o jogo respondeu: ${m.msg || ch || 'erro'}`);
       return;
     }
-    if (!ch.startsWith('market.')) return;
     const p = SN.pendentes[0];
+    if (!ch.startsWith('market.')) {
+      // outra recusa logo depois do pedido (anúncio sumiu, saldo, etc.): mostra o que o jogo disse
+      if (Date.now() - p.t < 5000) { snLog('info', `${p.nome}: o jogo respondeu "${m.msg || ch || 'erro'}" (conferindo a bolsa…)`); }
+      return;
+    }
     if (ch === 'market.sorteio' || ch === 'market.sorteioEspera') { snLog('sorteio', `${p.nome}: entrou no sorteio da liberação`); return; }
     SN.pendentes.shift();
     snLiberar(p);
@@ -528,6 +538,20 @@
     snRegistrar(ch === 'market.sorteioPerdeu' ? 'perdeu' : 'erro', p, ch === 'market.sorteioPerdeu' ? {} : { motivo: m.msg || ch });
   }
 
+  // Compra confirmada pela bolsa: o item entrou (ou, em Gemas, o saldo baixou o valor exato).
+  function snConferirPendentes() {
+    const e = S.eu;
+    if (!e || !SN.pendentes.length) return;
+    for (const p of [...SN.pendentes]) {
+      const item = Number(e.items?.[p.itemId]) || 0;
+      const entrou = item >= p.antes.item + p.qtd;
+      const pagou = p.moeda === 'orb' && p.antes.orbs - (Number(e.orbs) || 0) === p.valor;
+      if (!entrou && !pagou) continue;
+      SN.pendentes.splice(SN.pendentes.indexOf(p), 1);
+      snRegistrar('ganhou', p, { descricao: 'confirmado pela bolsa' });
+      snLog('comprou', `COMPROU: ${p.qtd}× ${p.nome} por ${fmtN(p.valor)} ${moedaTxt(p.moeda)} (confirmado: ${entrou ? `bolsa ${fmtN(p.antes.item)} → ${fmtN(item)}` : `Gemas ${fmtN(p.antes.orbs)} → ${fmtN(e.orbs)}`})`, p);
+    }
+  }
   function sniperComprou(ev) {
     if (!SN.pendentes.length) return;
     const p = SN.pendentes.shift();

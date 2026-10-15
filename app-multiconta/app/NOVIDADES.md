@@ -1,4 +1,4 @@
-- Ultra eco novo: um cartão por conta com pokémon (retrato e vida), XP/h, ouro/h, ouro, gemas, todas as pokébolas, poções em uso, itens raros e pedras com os ícones do jogo
-- Ultra eco: últimas capturas (equipe, Coleção, Depot ou saiu) e "Ver tudo" com capturas e bolsa completa
-- Ultra eco: as automações abrem e ajustam direto na tela; a página do jogo fica escondida por dentro (bem menos processador)
-- Atualização: o login da Kick é gravado antes de instalar (não desloga mais na próxima atualização)
+- Corrige o erro "efetividadeHunt is not a function" no Onde caçar (o jogo mudou na versão 1.291)
+- Sniper: avisa em vermelho quando algo impede a compra (teto de 24 h em 0, moeda desligada, Automação desligada)
+- Sniper: coluna "compra até" nos olhados e o motivo de cada oferta pulada
+- Sniper: confere a bolsa e as Gemas para confirmar se a compra entrou, mesmo quando o jogo não responde
