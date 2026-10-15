@@ -478,7 +478,7 @@
         const resumo = `${nome} ×${a.qtd} por ${fmtN(a.preco)} ${moedaTxt(base.moeda)}/un. — ${pct}% abaixo (${comp}) · ${quando}`;
         if (!snCompra()) { snLog('simulado', `teria comprado: ${resumo}`, base); snRegistrar('simulado', { ...base, qtd: a.qtd }); continue; }
         const qtd = snCabe(base.moeda, a.preco, a.qtd);
-        if (qtd < 1) { snLog('pulado', `sem teto/saldo para: ${resumo}`, base); continue; }
+        if (qtd < 1) { snLog('pulado', `achei mas não vou comprar (${snPorque(base.moeda, a.preco)}): ${resumo}`, base); continue; }
         // Pelo relógio do servidor: só depois de liberar, com 0,4–1,2 s de folga (dentro da janela de 3 s).
         const espera = Math.max(0, libera - agoraSrv()) + (libera ? 400 + Math.random() * 800 : 300 + Math.random() * 700);
         snLog('agendado', `vai tentar: ${resumo}`, base);
