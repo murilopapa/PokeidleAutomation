@@ -407,6 +407,10 @@ ipcMain.on('ui:cfg', (_e, i, cfg) => {
 });
 ipcMain.on('ui:recarregar', (_e, i) => views[i]?.webContents.reloadIgnoringCache());
 ipcMain.on('ui:devtools', (_e, i) => views[i]?.webContents.openDevTools({ mode: 'detach' }));
+ipcMain.on('ui:sniper-reset', (_e, i, moeda) => {
+  const v = views[i];
+  if (v && !v.webContents.isDestroyed()) v.webContents.send('jogo:runtime-msg', { type: 'pie-sniper-reset', moeda });
+});
 ipcMain.on('ui:hunt-auto', (_e, i, slug) => {
   const v = views[i];
   if (v && !v.webContents.isDestroyed() && typeof slug === 'string') v.webContents.send('jogo:runtime-msg', { type: 'pie-hunt-auto', slug });

@@ -61,6 +61,7 @@
     if (msg && msg.type === 'pie-hunt' && typeof msg.slug === 'string') toPage('selectHunt', { slug: msg.slug });
     // troca automática decidida fora da página (app): a página só obedece com as chaves ligadas
     if (msg && msg.type === 'pie-hunt-auto' && typeof msg.slug === 'string') toPage('selectHunt', { slug: msg.slug, origem: 'auto' });
+    if (msg && msg.type === 'pie-sniper-reset') toPage('sniperReset', { moeda: msg.moeda === 'gold' ? 'gold' : 'orb' });
   });
 
   // Zera o resumo da sessão anterior ao abrir o jogo, para o painel não mostrar dado velho.

@@ -307,8 +307,13 @@ check('comprar: entrou no sorteio e registrou a compra', snLog2.some((l) => /^so
 // aba Compras: resumo do período, por item (pago, vender a, mínimo, lucro já sem os 15%)
 await ovClicar('[data-sntab="compras"]'); await sleep(700);
 const compTxt = (await ovTexto()).replace(/\s+/g, ' ');
-check('aba Compras: 1 compra, 60 Gemas, mínimo 71, lucro +20 se revender a 95', /1unidades/.test(compTxt) && /60 Gemasgasto/.test(compTxt) && /Bicycle Fragment1609571\+20Gemas/.test(compTxt) && /1 ganhas/.test(compTxt), compTxt.slice(0, 600));
+check('aba Compras: 1 compra, 60 Gemas, mínimo 71, lucro +20 se revender a 95', /1unidades/.test(compTxt) && /60 Gemaspago/.test(compTxt) && /Bicycle Fragment1609571\+20Gemas/.test(compTxt) && /1 ganhas/.test(compTxt), compTxt.slice(0, 600));
 await shot('sniper-compras.png');
+await ovClicar('[data-sntira]'); await sleep(700);
+const compTxt2 = (await ovTexto()).replace(/\s+/g, ' ');
+check('X tira a compra da lista (e fica salvo)', /Nenhuma compra em aberto \(1 tirada da lista\)/.test(compTxt2) && (await ui.evaluate((i) => cfgDe(i).sniper.vendidos.length, iSn)) === 1, compTxt2.slice(0, 200));
+await ovClicar('[data-snvolta]'); await sleep(500);
+check('mostrar de novo devolve a compra', /Bicycle Fragment/.test(await ovTexto()));
 const persistido = JSON.parse(fs.readFileSync(path.join(userData, "contas", `conta-${iSn + 1}.json`), "utf8"));
 check('histórico do sniper fica salvo no disco', (persistido.sniper?.hist ?? []).some((x) => x.res === 'ganhou' && x.qtd === 1 && x.preco === 60), JSON.stringify(persistido.sniper?.hist?.slice(-2)));
 await ovClicar('[data-sntab="config"]'); await sleep(300);
@@ -322,6 +327,8 @@ const mapa2 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
 check('chavinha no botão liga e desliga sem abrir o menu', mapa1 === !mapa0 && mapa2 === mapa0 && !(await ovTexto()).trim(), JSON.stringify([mapa0, mapa1, mapa2]));
 await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sleep(800);
 check('teto de Gemas respeitado (100/dia: levou 1 de 3) e gasto contado', (await ui.evaluate((i) => S[i].sniper?.gasto?.orb, iSn)) === 60);
+await ovClicar(`[data-snzera="${iSn}|orb"]`); await sleep(2500);
+check('zerar o gasto do teto', (await ui.evaluate((i) => S[i].sniper?.gasto?.orb, iSn)) === 0, String(await ui.evaluate((i) => S[i].sniper?.gasto?.orb, iSn)));
 // só uma conta caça por vez
 const outraSn = (iSn + 1) % 4;
 await ui.evaluate((k) => mudarSniper(k, { enabled: true }), outraSn); await sleep(300);

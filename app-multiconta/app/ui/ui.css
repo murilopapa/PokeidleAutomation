@@ -503,3 +503,9 @@ img.u-ico.falhou{visibility:hidden}
 .u-tico{width:30px}
 .u-tico .u-ico{width:24px;height:24px}
 .u-dsec small{font-weight:500;color:var(--muted);margin-left:4px}
+.sn-it.sn-cp{grid-template-columns:96px minmax(0,2fr) 44px repeat(4,minmax(0,1fr)) 46px 26px}
+.sn-it.sn-cp.sim{opacity:.75}
+.sn-x{padding:2px!important;width:22px;height:22px}
+.sn-x svg{width:12px;height:12px}
+.sn-cards.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.sn-zerar,.sn-volta{font-size:11px;padding:1px 7px;margin-left:4px}

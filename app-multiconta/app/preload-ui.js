@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('app', {
   onJogo: on('jogo:estado'),
   // troca de hunt pedida pela interface (troca automática): o jogo só obedece com as chaves ligadas
   huntAuto: (i, slug) => ipcRenderer.send('ui:hunt-auto', i, slug),
+  sniperReset: (i, moeda) => ipcRenderer.send('ui:sniper-reset', i, moeda),
   kick: {
     set: (i, campo, valor) => ipcRenderer.invoke('kk:set', i, campo, valor),
     resgatar: (i, slug, tipo) => ipcRenderer.invoke('kk:resgatar', i, slug, tipo),

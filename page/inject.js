@@ -1131,6 +1131,13 @@
       sniperCfgMudou();
       publish(true);
     }
+    if (e.data.type === 'sniperReset') {
+      // botão "zerar" do teto: o gasto das últimas 24 h daquela moeda volta a 0
+      snGastos = snGastos.filter((g) => g.moeda !== e.data.moeda);
+      snGravarGastos();
+      snLog('info', `gasto de ${moedaTxt(e.data.moeda)} das últimas 24 h zerado`);
+      snPublicar();
+    }
     if (e.data.type === 'selectHunt' && typeof e.data.slug === 'string') {
       // "Ir" no painel (clique seu) ou troca automática (só com a chave geral e a da troca ligadas).
       const auto = e.data.origem === 'auto';

@@ -444,7 +444,7 @@ function sniperHTML(i, sw, fechar) {
   const gasto = st?.gasto || { gold: 0, orb: 0 };
   const moeda = (m, nome) => `<div class="sn-moeda">${chk(`data-snmoeda="${i}|${m}"`, sn.moedas[m].on, nome)}
       <label class="sn-teto">teto 24 h <input type="number" min="0" value="${sn.moedas[m].tetoDia}" data-snteto="${i}|${m}"></label>
-      <span class="sn-gasto">gasto <b>${num(gasto[m] || 0)}</b></span></div>`;
+      <span class="sn-gasto">gasto 24 h <b>${num(gasto[m] || 0)}</b>${gasto[m] ? ` <button class="ghost sn-zerar" data-snzera="${i}|${m}" title="Zera o que já foi gasto nas últimas 24 h (o teto volta inteiro)">zerar</button>` : ''}</span></div>`;
   const log = (st?.log ?? []).slice().reverse().slice(0, 14).map((l) => `<div class="sn-l ${SN_COR[l.tipo] || ''}"><span>${hora(l.t)}</span>${esc(l.texto)}</div>`).join('')
     || `<div class="hint" style="margin:4px">${!sn.enabled ? 'Ligue para começar a procurar.' : st?.varreduras ? `Nenhum anúncio ${sn.desconto}% abaixo da referência ainda. Veja em "Olhados agora" quanto falta em cada item.` : 'Procurando… a 1ª varredura sai em segundos.'}</div>`;
   const olh = st?.olhados ?? [];
@@ -490,45 +490,42 @@ function snResumo(hist, horas) {
 }
 const moedaN = (m) => (m === 'orb' ? 'Gemas' : 'Coins');
 const quando = (t) => { const d = new Date(t); const hoje = new Date().toDateString() === d.toDateString(); return hoje ? hora(t) : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+// Aba Compras: uma linha por compra (sem juntar), com o que você pagou e por quanto vender.
+// O X tira a compra da lista (vendeu, usou…); fica guardado na config da conta.
 function comprasHTML(i, st) {
   const r = snResumo(st?.hist, snPeriodo);
   const per = `<label class="sn-per">Período <select data-snper="${i}">${[[24, 'últimas 24 h'], [168, 'últimos 7 dias'], [0, 'tudo']].map(([v, n]) => `<option value="${v}" ${snPeriodo === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
-  const lista = r.ganhou.length ? r.ganhou : r.simulado;
+  const tirados = new Set(cfgDe(i).sniper?.vendidos ?? []);
   const simul = !r.ganhou.length && r.simulado.length;
+  const lista = (r.ganhou.length ? r.ganhou : r.simulado).filter((x) => !tirados.has(x.t));
+  const nTirados = (r.ganhou.length ? r.ganhou : r.simulado).length - lista.length;
   if (!lista.length) {
-    return per + `<div class="vazio-top">${r.perdeu.length ? `Nenhuma compra ainda; ${r.perdeu.length} sorteio(s) perdido(s) para outro jogador.` : 'Nada comprado (nem simulado) neste período.'}</div>`;
+    return per + `<div class="vazio-top">${nTirados ? `Nenhuma compra em aberto (${nTirados} tirada${nTirados > 1 ? 's' : ''} da lista).` : r.perdeu.length ? `Nenhuma compra ainda; ${r.perdeu.length} sorteio(s) perdido(s) para outro jogador.` : 'Nada comprado (nem simulado) neste período.'}</div>`
+      + (nTirados ? `<button class="ghost" data-snvolta="${i}">Mostrar as tiradas de novo</button>` : '');
   }
-  // por moeda e por item: unidades, custo médio, referência de agora, preço mínimo (empate) e lucro se revender
   const refAgora = {};
   for (const o of st?.olhados ?? []) if (o.ref) refAgora[`${o.nome}|${o.moeda}`] = o.ref;
-  const porItem = {};
-  for (const x of lista) {
-    const k = `${x.nome}|${x.moeda}`;
-    const g = (porItem[k] ??= { nome: x.nome, moeda: x.moeda, un: 0, custo: 0, refCompra: 0 });
-    g.un += x.qtd; g.custo += x.qtd * x.preco; g.refCompra += x.qtd * (x.ref || x.preco);
-  }
   const totais = {};
-  const linhasItem = Object.entries(porItem).map(([k, g]) => {
-    const medio = g.custo / g.un;
-    const ref = refAgora[k] ?? g.refCompra / g.un;
-    const minimo = Math.ceil(medio / (1 - TAXA_VENDA));
-    const liquido = Math.floor(ref * (1 - TAXA_VENDA));
-    const lucro = (liquido - medio) * g.un;
-    const t = (totais[g.moeda] ??= { gasto: 0, lucro: 0, un: 0, ref: 0 });
-    t.gasto += g.custo; t.lucro += lucro; t.un += g.un; t.ref += g.refCompra;
-    return `<div class="sn-it"><span>${esc(g.nome)}</span><span>${num(g.un)}</span><span>${num(Math.round(medio))}</span><span title="${refAgora[k] ? 'referência de agora (últimas vendas / vitrine)' : 'referência na hora da compra'}">${num(Math.round(ref))}${refAgora[k] ? '' : '*'}</span><span title="abaixo disso você perde dinheiro (a taxa de 15% sai de quem vende)">${num(minimo)}</span><b class="${lucro >= 0 ? 'ok' : 'bad'}">${lucro >= 0 ? '+' : ''}${num(Math.round(lucro))}</b><span>${moedaN(g.moeda)}</span></div>`;
+  const linhas = lista.slice().reverse().map((x) => {
+    const ref = refAgora[`${x.nome}|${x.moeda}`] ?? x.ref ?? x.preco;
+    const minimo = Math.ceil(x.preco / (1 - TAXA_VENDA));
+    const lucro = (Math.floor(ref * (1 - TAXA_VENDA)) - x.preco) * x.qtd;
+    const t = (totais[x.moeda] ??= { gasto: 0, lucro: 0, un: 0 });
+    t.gasto += x.preco * x.qtd; t.lucro += lucro; t.un += x.qtd;
+    return `<div class="sn-it sn-cp ${x.res === 'ganhou' ? '' : 'sim'}"><span>${quando(x.t)}</span><span>${esc(x.nome)}</span><span>${num(x.qtd)}</span><span>${num(x.preco)}</span>`
+      + `<b title="${refAgora[`${x.nome}|${x.moeda}`] ? 'preço de agora (últimas vendas / vitrine)' : 'referência na hora da compra'}">${num(Math.round(ref))}</b>`
+      + `<span title="abaixo disso você perde dinheiro (os 15% saem de quem vende)">${num(minimo)}</span>`
+      + `<b class="${lucro >= 0 ? 'ok' : 'bad'}">${lucro >= 0 ? '+' : ''}${num(Math.round(lucro))}</b><span>${moedaN(x.moeda)}</span>`
+      + `<button class="ib sn-x" data-sntira="${i}|${x.t}" title="Tirar da lista (vendi / usei)">${ICON.x}</button></div>`;
   }).join('');
-  const cards = Object.entries(totais).map(([m, t]) => `<div class="sn-card"><b>${num(t.un)}</b><span>unidades${simul ? ' (simulado)' : ''}</span></div>
-    <div class="sn-card"><b>${num(Math.round(t.gasto))} ${moedaN(m)}</b><span>${simul ? 'teria gastado' : 'gasto'}</span></div>
-    <div class="sn-card"><b>${t.ref ? Math.round((1 - t.gasto / t.ref) * 100) : 0}%</b><span>desconto médio</span></div>
-    <div class="sn-card"><b class="${t.lucro >= 0 ? 'ok' : 'bad'}">${t.lucro >= 0 ? '+' : ''}${num(Math.round(t.lucro))} ${moedaN(m)}</b><span>lucro se revender agora (já sem os 15%)</span></div>`).join('');
-  const ult = lista.slice().reverse().slice(0, 30).map((x) => `<div class="sn-l ${x.res === 'ganhou' ? 'ok' : 'sim'}"><span>${quando(x.t)}</span>${esc(x.nome)} ×${num(x.qtd)} por ${num(x.preco)} ${moedaN(x.moeda)}/un. (−${x.pct}% da ref. ${num(x.ref)})${x.vendedor ? ` · de ${esc(x.vendedor)}` : ''}</div>`).join('');
+  const cards = Object.entries(totais).map(([m, t]) => `<div class="sn-card"><b>${num(t.un)}</b><span>unidades em aberto${simul ? ' (simulado)' : ''}</span></div>
+    <div class="sn-card"><b>${num(Math.round(t.gasto))} ${moedaN(m)}</b><span>${simul ? 'teria gastado' : 'pago'}</span></div>
+    <div class="sn-card"><b class="${t.lucro >= 0 ? 'ok' : 'bad'}">${t.lucro >= 0 ? '+' : ''}${num(Math.round(t.lucro))} ${moedaN(m)}</b><span>lucro se vender agora (já sem os 15%)</span></div>`).join('');
   return per + (simul ? '<div class="res">Modo simular: estes são os que ele <b>teria</b> comprado.</div>' : '')
-    + `<div class="sn-cards">${cards}</div>`
-    + `<div class="hint" style="margin:6px 2px 2px">Tentativas no período: <b>${r.ganhou.length}</b> ganhas · <b>${r.perdeu.length}</b> sorteios perdidos${r.erro.length ? ` · <b>${r.erro.length}</b> com erro` : ''}${r.simulado.length && r.ganhou.length ? ` · ${r.simulado.length} simuladas` : ''}</div>`
-    + `<div class="sn-tab"><div class="sn-it sn-ith"><span>Item</span><span>Unid.</span><span>Paguei/un.</span><span>Vender a</span><span>Mínimo</span><span>Lucro</span><span></span></div>${linhasItem}</div>`
-    + `<div class="hint">"Vender a" = referência de agora (a menor entre as últimas vendas e a vitrine)${Object.keys(refAgora).length ? '' : '; * = referência na hora da compra'}. "Mínimo" = abaixo disso a venda dá prejuízo (a comissão de 15% sai de quem vende; item não paga diária).</div>`
-    + `<div class="sn-log">${ult}</div>`;
+    + `<div class="sn-cards c3">${cards}</div>`
+    + `<div class="hint" style="margin:6px 2px 2px">Tentativas no período: <b>${r.ganhou.length}</b> ganhas · <b>${r.perdeu.length}</b> sorteios perdidos${r.erro.length ? ` · <b>${r.erro.length}</b> com erro` : ''}${nTirados ? ` · ${nTirados} tirada${nTirados > 1 ? 's' : ''} da lista <button class="ghost sn-volta" data-snvolta="${i}">mostrar de novo</button>` : ''}</div>`
+    + `<div class="sn-tab"><div class="sn-it sn-cp sn-ith"><span>Quando</span><span>Item</span><span>Qtd</span><span>Paguei/un.</span><span>Vender a</span><span>Mínimo</span><span>Lucro</span><span></span><span></span></div>${linhas}</div>`
+    + `<div class="hint">"Vender a" = preço de agora no Mercado (ou o da hora da compra, se ele não está olhando o item). "Mínimo" = abaixo disso a venda dá prejuízo. O X tira da lista quando você vender.</div>`;
 }
 
 function mudarSniper(i, patch) {
@@ -1085,7 +1082,7 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-udet],[data-ufil],[data-ufechar],[data-sntab],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-sntira],[data-snvolta],[data-snzera],[data-udet],[data-ufil],[data-ufechar],[data-sntab],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) {
@@ -1164,6 +1161,17 @@ async function acaoClick(d, id, campos) {
     if (!ligada) { S[i].res = null; S[i].top = []; S[i].alerta = null; if (foco === i) foco = null; }
     renderTudo();
     toast(ligada ? 'Conta ligada' : 'Conta desligada: jogo fechado, RAM liberada');
+  } else if (d.sntira) {
+    const [si, t] = d.sntira.split('|'), i = +si;
+    const atuais = cfgDe(i).sniper.vendidos ?? [];
+    mudarSniper(i, { vendidos: [...atuais, +t].slice(-1000) });
+    ovSync();
+  } else if (d.snvolta) {
+    mudarSniper(+d.snvolta, { vendidos: [] }); ovSync();
+  } else if (d.snzera) {
+    const [si, m] = d.snzera.split('|');
+    app.sniperReset(+si, m);
+    toast(`Gasto de ${m === 'orb' ? 'Gemas' : 'Coins'} das últimas 24 h zerado`);
   } else if (d.udet) {
     const [i, aba] = d.udet.split('|');
     painel = null; menu = null; twHover = null;
