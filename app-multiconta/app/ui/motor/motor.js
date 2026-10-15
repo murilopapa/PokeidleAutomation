@@ -206,13 +206,21 @@ function golpesDe(pk, esp, mod) {
   return lista;
 }
 
+// Na hunt a vantagem elemental é amplificada (ampliacaoHunt, 1,5 no welcome). O jogo tirou a
+// função pronta do hunt-analyser na v1.291; a conta é a mesma de antes: ×2 vira ×2,5, ×0,5 vira ×0,33.
+const amplificarHunt = (v, fator = 1.5) => (v === 0 || v === 1 ? v : v > 1 ? 1 + (v - 1) * fator : v / fator);
+function efetividadeHunt(mod, atq, d1, d2, tabela, fator) {
+  const a = mod.analyser;
+  if (typeof a.efetividadeHunt === 'function') return a.efetividadeHunt(atq, d1, d2, tabela, fator);
+  return amplificarHunt(a.efetividade(atq, d1, d2, tabela), fator);
+}
 function fazEfetividade(consts, mod) {
   const tabela = consts.tabelaTipos ?? {};
   const fator = consts.ampliacaoHunt ?? 1.5;
   const memo = new Map();
   return (atq, d1, d2) => {
     const k = atq + '|' + d1 + '|' + d2;
-    if (!memo.has(k)) memo.set(k, mod.analyser.efetividadeHunt(atq, d1, d2 ?? null, tabela, fator));
+    if (!memo.has(k)) memo.set(k, efetividadeHunt(mod, atq, d1, d2 ?? null, tabela, fator));
     return memo.get(k);
   };
 }
