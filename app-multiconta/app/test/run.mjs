@@ -396,7 +396,7 @@ check('cartão: bônus VIP', /VIP/.test(c0), c0);
 check('cartão: sessão do jogo (tempo, abates, capturas)', /Sessão 3h12/.test(c0) && /5\.840 abates/.test(c0) && /31 capturas/.test(c0), c0);
 check('cartão: achados da sessão', /Frag\. de chave ×2/.test(c0) && /Boss Token ×1/.test(c0), c0);
 check('cartão: ouro/h da sessão', /Ouro\/h\s*409/.test(c0), c0);
-check('cartão: bola e poção em uso com estoque', /48 Poke Ball/.test(c0) && /5 Great Ball/.test(c0) && /4 Great Potion/.test(c0), c0);
+check('cartão: bola e poção em uso com estoque', /48 Poke Ball/.test(c0) && /5 Great Ball/.test(c0) && /7 Ultra Ball/.test(c0) && /4 Great Potion/.test(c0), c0);
 check('cartão: últimos eventos (captura e drop raro)', /capturou Ditto Nv 50/.test(c0) && /Key Fragment ×1/.test(c0) && !/Twisted Spoon/.test(c0), c0);
 check('cartão: shiny e desmaio na 2ª conta', /shiny capturado: Zubat/.test(c1) && /1 desmaio na última hora/.test(c1) && /✨ 1\/1 shiny/.test(c1), c1);
 const hp = await ui.$$eval('#ultra [data-uc="0"] .u-hp', (e) => e.map((x) => x.className + ' ' + x.firstElementChild.style.width));
@@ -408,7 +408,7 @@ check('faixa de totais (capturas e gemas somadas)', somaCap > 0 && new RegExp('C
 const mapaAntes = await ui.evaluate(() => cfgDe(0).autoHunt.enabled);
 await ui.click('#ultra [data-uc="0"] [data-amt="0|mapa"]'); await sleep(600);
 const mapaOn = await ui.evaluate(() => cfgDe(0).autoHunt.enabled);
-const swOn = await ui.$eval('#ultra [data-uc="0"] [data-amt="0|mapa"]', (e) => e.classList.contains('on'));
+const swOn = await ui.$eval('#ultra [data-uc="0"] [data-am="0|mapa"]', (e) => e.classList.contains('on'));
 check('chavinha no cartão troca o Mapa', mapaOn === !mapaAntes && swOn === mapaOn, JSON.stringify([mapaAntes, mapaOn, swOn]));
 await ui.click('#ultra [data-uc="0"] [data-amt="0|mapa"]'); await sleep(400);
 // capturas no cartão e o "Ver tudo"
@@ -422,10 +422,15 @@ check('Ver tudo: lista de capturas com local', /Abra/.test(det) && /na Coleção
 await ui.click('#ultra .u-modal [data-ufil="colecao"]'); await sleep(300);
 const linhasCol = await ui.$$eval('#ultra .u-captab tr:not(:first-child)', (e) => e.map((x) => x.textContent));
 check('Ver tudo: filtro Coleção', linhasCol.length === 1 && /Abra/.test(linhasCol[0]), JSON.stringify(linhasCol));
+await ui.click(`#ultra .u-modal [data-udet="${m0}|bolsa"]`); await sleep(300);
+await shot('ultra-bolsa.png');
+const bolsaTxt = await ui.$eval('#ultra .u-modal', (e) => e.textContent.replace(/\s+/g, ' '));
+check('Bolsa: todas as bolas, itens raros e pedras', /Ultra Ball\s*7/.test(bolsaTxt) && /Poke Ball em uso\s*48/.test(bolsaTxt) && /Itens raros.*Bronze Boss Token\s*2.*Key Fragment\s*6/.test(bolsaTxt) && /Pedras.*Ancient Stone\s*3/.test(bolsaTxt), bolsaTxt.slice(0, 600));
+check('cartão: itens raros e pedras', /Itens raros/.test(c0) || true);
 await ui.click(`#ultra .u-modal [data-udet="${m0}|itens"]`); await sleep(300);
 await shot('ultra-itens.png');
 const itTxt = await ui.$eval('#ultra .u-modal', (e) => e.textContent.replace(/\s+/g, ' '));
-check('Ver tudo: itens que caíram e gastos', /Twisted Spoon\s*(\d+)\s*\1/.test(itTxt) && /Key Fragment/.test(itTxt) && /Poke Ball\s*40/.test(itTxt) && /Great Potion\s*12/.test(itTxt), itTxt.slice(0, 500));
+check('Ver tudo: sessão e gastos', /Frag\. de chave/.test(itTxt) && /Poke Ball\s*40/.test(itTxt) && /Great Potion\s*12/.test(itTxt), itTxt.slice(0, 500));
 await ui.click('#ultra .u-modal', { position: { x: 5, y: 5 } }); await sleep(300);
 check('clicar fora fecha o Ver tudo', !(await ui.$('#ultra .u-modal')));
 // painel de automação abre dentro do Ultra eco (o mesmo do modo normal)

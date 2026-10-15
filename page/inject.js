@@ -586,7 +586,7 @@
   }
 
   const itemResumo = (i) => ({
-    name: i.name, category: i.category, npcPrice: i.npcPrice ?? null, priceGold: i.priceGold ?? null,
+    name: i.name, category: i.category, rare: !!i.rare, npcPrice: i.npcPrice ?? null, priceGold: i.priceGold ?? null,
     healAmount: i.healAmount ?? null, healPct: i.healPct ?? null, revivePct: i.revivePct ?? null,
   });
   // items.json (espelho) + itens próprios do welcome, no mesmo mapa (como o jogo faz).
@@ -803,6 +803,30 @@
     });
   }
 
+  // A bolsa como o jogo separa nas abas: todas as bolas, "Itens raros" e "Pedras" (mesmas regras
+  // do categoriaBolsa do jogo: boss token, fragmentos, Exp. Share, Name Tag, peças/discos de TM,
+  // Ficha PvP, itens-chave raros 70000–70099; pedra = categoria stone, menos a sucata).
+  const RAROS_IDS = new Set([70001, 70011, 70012, 70013, 70016, 70050, 59194, 40530, 70040, 70041, 70042, 70043, 70044, 70080, 70081, 70082, 70083, 70084]);
+  function bolsa(e) {
+    const out = { bolas: [], raros: [], pedras: [] };
+    for (const b of S.catalog?.bolas ?? []) { const q = Number(e.balls?.[b.id]) || 0; if (q > 0) out.bolas.push({ id: b.id, nome: b.nome, q }); }
+    for (const [k, v] of Object.entries(e.items ?? {})) {
+      const q = Number(v) || 0, id = Number(k);
+      if (q <= 0) continue;
+      const it = S.items?.[id];
+      const nome = it?.name ?? 'Item ' + id;
+      const raro = /boss token$/i.test(nome) || RAROS_IDS.has(id) || it?.category === 'tm' || (id >= 70000 && id < 70100 && it?.category === 'key-item' && it?.rare);
+      if (raro) out.raros.push({ id, nome, q });
+      else if (it?.category === 'stone' && nome.toLowerCase() !== 'rough gemstone') out.pedras.push({ id, nome, q });
+    }
+    for (const c of e.caixas?.minhas ?? []) out.raros.push({ id: 'cx' + c.id, nome: `Caixa de Fundador #${c.numero ?? c.id}`, q: 1 });
+    for (const c of e.casa?.lista ?? []) out.raros.push({ id: 'casa' + c.id, nome: `Casa${c.rar ? ' ' + c.rar : ''} #${c.id}`, q: 1 });
+    for (const b of e.bicicleta?.lista ?? []) out.raros.push({ id: 'bike' + b.id, nome: `Bicicleta${b.rar ? ' ' + b.rar : ''} #${b.id}`, q: 1 });
+    const ord = (a, b) => String(a.nome).localeCompare(String(b.nome));
+    out.raros.sort(ord); out.pedras.sort(ord);
+    return out;
+  }
+
   // A prancheta de sessão do próprio jogo (o painel "Sessão"): ele grava no navegador da conta.
   const SESSAO_CAMPOS = ['xpTreinador', 'xpPokemon', 'gold', 'abates', 'capturas', 'shiniesVistos', 'shinies',
     'bossTokens', 'fragChave', 'fragShiny', 'fragBicicleta', 'fragMega', 'fragMegaShiny', 'tmPeca', 'tmPecaAoe',
@@ -878,6 +902,7 @@
       uso: ritmos(),
       sessao: (() => { const ses = sessaoDoJogo(e.nick); if (ses) ses.itens = itensDaSessao(ses); return ses; })(),
       capturas: capturasDoJogo(e),
+      bolsa: bolsa(e),
       feed: feed.slice(-6),
       desmaiosH: desmaios.filter((t) => t > Date.now() - 3600000).length,
       ultimoCombate: S.ultimoCombate ?? null,

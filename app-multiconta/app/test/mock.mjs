@@ -44,7 +44,7 @@ function estadoCheio(n) {
     cheio: true, nick: ['murilo', 'segunda', 'terceira', 'quarta'][n % 4], level: [87, 120, 60, 40][n % 4], gold: 500000, xp: 50000,
     loja: { vipAte: n % 4 === 0 ? Date.now() + 864e5 : 0, boosts: {} }, guildBonusPct: 0, guild: { boostAte: 0 }, diamonds: 0, orbs: 1000,
     huntSlug: n % 4 === 3 ? null : n % 4 === 1 ? 'tangela' : 'kadabra', noCentro: n % 4 === 3, activeId: 11,
-    balls: { 1: 48, 2: 5 }, items: { 200: 30, 201: 4 },
+    balls: { 1: 48, 2: 5, 3: 7 }, items: { 200: 30, 201: 4, 2: 3, 70011: 6, 70000: 2 },
     automation: { pokemonTravado: [14], autoPotion: true, autoBall: true, ballIds: n % 4 === 0 ? [1, 2] : [1], potionIds: n % 4 === 1 ? [201, 90001] : [201] },
     twitch: {
       login: n === 0 ? 'murilo_tv' : null, aoVivo: true, assistindo: false, pct: 15, pctAtual: 0, extra: 2.5, assistindoEm: [],
@@ -140,7 +140,7 @@ wssJogo.on('connection', (ws) => {
     captura: { base: 0.0075 }, chanceShiny: 0.001, tiposBoost: [],
     // Item próprio do jogo (não está no items.json) e preços cobrados pelo servidor.
     mercado: { cooldownCompraMs: 120000, catalogo: [{ id: 2, nome: 'Bicycle Fragment', categoria: 'fragment' }, { id: 3, nome: 'Key Fragment', categoria: 'fragment' }, { id: 4, nome: 'Fire Stone', categoria: 'stone' }, { id: 9, nome: 'Bronze Boss Token', categoria: 'boss' }] },
-    itensNossos: [{ id: 90001, name: 'Golden Potion', category: 'heal', npcPrice: 5000, healPct: 1 }],
+    itensNossos: [{ id: 90001, name: 'Golden Potion', category: 'heal', npcPrice: 5000, healPct: 1 }, { id: 70011, name: 'Key Fragment', category: 'key-item', rare: true, npcPrice: 0 }],
     itensCompraveis: [{ itemId: 200, preco: 50 }, { itemId: 201, preco: 150 }, { itemId: 90001, preco: 4000 }],
   }));
   // eventos que o painel do Ultra eco mostra: captura (shiny na 2ª conta), drop raro e desmaio

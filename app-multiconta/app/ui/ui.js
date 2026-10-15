@@ -815,6 +815,16 @@ function consumiveis(i, kind) {
     return { id, nome, q, pouco };
   });
 }
+// Todas as bolas que a conta tem (as escolhidas no automático primeiro, marcadas).
+function bolasDaConta(i) {
+  const esc0 = consumiveis(i, 'ball');
+  const sel = new Set(esc0.map((x) => Number(x.id)));
+  const todas = S[i].snap?.bolsa?.bolas;
+  if (!todas) return esc0.map((x) => ({ ...x, sel: true }));
+  const lista = todas.map((b) => ({ ...b, sel: sel.has(Number(b.id)), pouco: sel.has(Number(b.id)) && (esc0.find((x) => Number(x.id) === Number(b.id))?.pouco) }));
+  for (const x of esc0) if (!lista.some((b) => Number(b.id) === Number(x.id))) lista.push({ ...x, sel: true });
+  return lista.sort((a, b) => (b.sel - a.sel) || (Number(a.id) - Number(b.id)));
+}
 function ultraDados(i) {
   const s = S[i], snap = s.snap;
   if (!snap?.ready) return { i, carregando: true };
@@ -842,7 +852,7 @@ function ultraDados(i) {
     xp: xphReal(i), xpEst: xphReal(i) == null ? S[i].rAtual?.xpH ?? null : null,
     ouroH: sesH && ses.gold ? Math.round(ses.gold * sesH) : null,
     abH: snap.xpMedido?.kph ?? (sesH && ses.abates ? Math.round(ses.abates * sesH) : null),
-    bolas: consumiveis(i, 'ball'), pocs: consumiveis(i, 'item'),
+    bolas: bolasDaConta(i), pocs: consumiveis(i, 'item'), bolsa: snap.bolsa || null,
     capturas: snap.capturas || [],
     achados: ses ? ACHADOS.filter(([k]) => ses[k] > 0).map(([k, n]) => [n, ses[k]]) : [],
     feed: (snap.feed || []).slice(-3).reverse(),
@@ -858,7 +868,8 @@ function cartaoUltra(d) {
   const pk = d.pk, ses = d.ses;
   const outros = d.team.filter((p) => p !== pk);
   const num2 = (v, est) => (v == null ? '—' : (est ? '≈ ' : '') + curto(v));
-  const cons = (lista, tipo) => lista.map((x) => `<span class="u-cons ${tipo} ${x.pouco ? 'pouco' : ''}" title="${x.pouco ? 'Está acabando' : 'Escolhida para usar'}"><i></i><b>${num(x.q)}</b> ${esc(x.nome)}</span>`).join('');
+  const cons = (lista, tipo) => lista.map((x) => `<span class="u-cons ${tipo} ${x.pouco ? 'pouco' : ''} ${tipo === 'poc' || x.sel ? 'sel' : ''}" title="${x.pouco ? 'Está acabando' : tipo === 'poc' || x.sel ? 'Escolhida para usar no automático' : 'Na bolsa'}"><i></i><b>${num(x.q)}</b> ${esc(x.nome)}</span>`).join('');
+  const chipsBolsa = (lista, cls, rot) => (lista?.length ? `<div class="u-bolsa ${cls}" data-udet="${i}|bolsa" title="Ver a bolsa"><small>${rot}</small>${lista.slice(0, 8).map((x) => `<span>${esc(x.nome)}${x.q > 1 ? ` <b>×${num(x.q)}</b>` : ''}</span>`).join('')}${lista.length > 8 ? `<span class="mais">+${lista.length - 8}</span>` : ''}</div>` : '');
   const caps = d.capturas.slice(0, 7);
   return `<div class="u-cab2"><span class="dot ${d.cls === 'ok' ? 'hunt' : d.cls === 'bad' ? 'bad' : 'fight'}"></span><b>${nomeConta(i)}</b><small>Nv ${num(snap.level)}</small>`
     + `${d.bonus.map((x) => `<span class="u-bn">${esc(x)}</span>`).join('')}<span class="sp"></span><span class="u-st ${d.cls}">${esc(d.st)}</span><button class="u-ver" data-udet="${i}|capturas" title="Capturas, itens e gastos desta conta">Ver tudo</button></div>`
@@ -871,9 +882,10 @@ function cartaoUltra(d) {
     + `<div class="u-nums"><div><small>XP/h${d.xp == null && d.xpEst != null ? ' (estim.)' : ''}</small><b class="xp">${num2(d.xp ?? d.xpEst, d.xp == null && d.xpEst != null)}</b></div>`
     + `<div><small>Ouro/h</small><b class="ouro">${num2(d.ouroH)}</b></div><div><small>Abates/h</small><b>${num2(d.abH)}</b></div></div>`
     + `<div class="u-sal"><span>Ouro <b>${curto(snap.gold)}</b></span><span>Gemas <b>${num(snap.orbs)}</b></span>${snap.diamonds ? `<span>Diamantes <b>${num(snap.diamonds)}</b></span>` : ''}</div>`
-    + `<div class="u-sal">${cons(d.bolas, 'bola') || '<span>nenhuma bola escolhida</span>'}</div><div class="u-sal">${cons(d.pocs, 'poc') || '<span>nenhuma poção escolhida</span>'}</div>`
+    + `<div class="u-sal">${cons(d.bolas, 'bola') || '<span>nenhuma bola</span>'}</div><div class="u-sal">${cons(d.pocs, 'poc') || '<span>nenhuma poção escolhida</span>'}</div>`
     + (ses ? `<div class="u-ses"><span>Sessão <b>${tempoCurto(ses.ms)}</b></span><span><b>${num(ses.abates)}</b> abates</span><span><b>${num(ses.capturas)}</b> capturas</span>${ses.shinies || ses.shiniesVistos ? `<span class="sh">✨ <b>${ses.shinies}</b>/${ses.shiniesVistos} shiny</span>` : ''}${d.desmaiosH ? `<span class="bad"><b>${d.desmaiosH}</b> desmaio${d.desmaiosH > 1 ? 's' : ''} na última hora</span>` : ''}</div>` : '')
-    + (d.achados.length ? `<div class="u-ach">${d.achados.map(([n, q]) => `<span>${esc(n)} <b>×${num(q)}</b></span>`).join('')}</div>` : '')
+    + (d.achados.length ? `<div class="u-ach" title="Achados raros desta sessão"><small>Na sessão</small>${d.achados.map(([n, q]) => `<span>${esc(n)} <b>×${num(q)}</b></span>`).join('')}</div>` : '')
+    + chipsBolsa(d.bolsa?.raros, 'raros', 'Itens raros na bolsa') + chipsBolsa(d.bolsa?.pedras, 'pedras', 'Pedras na bolsa')
     + (caps.length ? `<div class="u-caps" data-udet="${i}|capturas" title="Ver todas as capturas">${caps.map((p) => `<span class="u-cap ${p.shiny ? 'sh' : ''} ${p.onde}" title="${esc(p.nome)} Nv ${num(p.level)} · ${ONDE[p.onde]}">${retratoPk(p)}<i></i></span>`).join('')}<span class="u-mais">ver tudo ›</span></div>` : '')
     + (d.feed.length ? `<div class="u-feed">${d.feed.map((f) => `<div class="${f.tipo}"><small>${horaCurta(f.t)}</small> ${ICONE_FEED[f.tipo] || '·'} ${esc(f.texto)}</div>`).join('')}</div>` : '')
     + chaves;
@@ -883,21 +895,24 @@ function detalheHTML(i, aba, filtro) {
   const s = S[i], snap = s.snap || {}, ses = snap.sessao, cat = s.catalog;
   const caps = snap.capturas || [];
   const conta = (o) => caps.filter((c) => c.onde === o).length;
-  const abas = `<div class="sn-abas"><button class="${aba === 'capturas' ? 'on' : ''}" data-udet="${i}|capturas">Capturas <b>${caps.length}</b></button><button class="${aba === 'itens' ? 'on' : ''}" data-udet="${i}|itens">Itens e gastos</button></div>`;
+  const abas = `<div class="sn-abas"><button class="${aba === 'capturas' ? 'on' : ''}" data-udet="${i}|capturas">Capturas <b>${caps.length}</b></button><button class="${aba === 'bolsa' ? 'on' : ''}" data-udet="${i}|bolsa">Bolsa</button><button class="${aba === 'itens' ? 'on' : ''}" data-udet="${i}|itens">Sessão e gastos</button></div>`;
   const cab = `<div class="ph2"><span>${nomeConta(i)} · tudo da sessão</span><button class="ib" data-ufechar="1" title="Fechar (Esc)">${ICON.x}</button></div>${abas}`;
+  if (aba === 'bolsa') {
+    const b = snap.bolsa || { bolas: [], raros: [], pedras: [] };
+    const sel = new Set(consumiveis(i, 'ball').map((x) => Number(x.id)));
+    const tab = (lista, vazio, marca) => (lista.length ? `<table class="u-tab"><tr><th>Item</th><th class="n">Qtd</th></tr>${lista.map((x) => `<tr><td>${esc(x.nome)}${marca && marca(x) ? ' <span class="u-onde equipe">em uso</span>' : ''}</td><td class="n">${num(x.q)}</td></tr>`).join('')}</table>` : `<div class="hint">${vazio}</div>`);
+    return cab + `<div class="u-dcols3"><div><div class="u-dsec">Pokébolas</div>${tab(b.bolas, 'Nenhuma bola.', (x) => sel.has(Number(x.id)))}<div class="u-dsec">Poções escolhidas</div>${tab(consumiveis(i, 'item').map((x) => ({ nome: x.nome, q: x.q })), 'Nenhuma escolhida.')}</div>`
+      + `<div><div class="u-dsec">Itens raros</div>${tab(b.raros, 'Nenhum item raro.')}</div><div><div class="u-dsec">Pedras</div>${tab(b.pedras, 'Nenhuma pedra.')}</div></div>`;
+  }
   if (aba === 'itens') {
     const nomeBola = (id) => cat?.bolas?.find((b) => b.id === Number(id))?.nome || `Bola ${id}`;
     const nomeItem = (id) => cat?.items?.[id]?.name || `Item ${id}`;
     const gasto = (m, nome) => Object.entries(m || {}).filter(([, q]) => q > 0).map(([id, q]) => `<tr><td>${esc(nome(id))}</td><td class="n">${num(q)}</td></tr>`).join('');
-    const itens = ses?.itens || [];
     const raros = ses ? ACHADOS.filter(([k]) => ses[k] > 0) : [];
     return cab + (ses ? `<div class="u-dres">Sessão de <b>${tempoCurto(ses.ms)}</b> · <b>${num(ses.abates)}</b> abates · <b>${curto(ses.gold)}</b> de ouro · <b>${num(ses.capturas)}</b> capturas</div>` : '<div class="vazio-top">O jogo ainda não gravou a sessão desta conta.</div>')
       + (raros.length ? `<div class="u-dsec">Achados raros</div><div class="u-ach">${raros.map(([k, n]) => `<span>${esc(n)} <b>×${num(ses[k])}</b></span>`).join('')}</div>` : '')
-      + `<div class="u-dcols"><div><div class="u-dsec">Itens que caíram <small>(${itens.length ? 'desde que o app abriu a conta, zera com a sessão' : 'nenhum ainda'})</small></div>`
-      + (itens.length ? `<table class="u-tab"><tr><th>Item</th><th class="n">Qtd</th><th class="n">Vendido auto.</th></tr>${itens.map((x) => `<tr><td>${esc(x.nome)}</td><td class="n">${num(x.qtd)}</td><td class="n">${x.auto ? num(x.auto) : '—'}</td></tr>`).join('')}</table>` : '')
-      + `</div><div><div class="u-dsec">Gastos na sessão</div>`
-      + (ses && (gasto(ses.bolas, nomeBola) || gasto(ses.pocoes, nomeItem)) ? `<table class="u-tab"><tr><th>Usado</th><th class="n">Qtd</th></tr>${gasto(ses.bolas, nomeBola)}${gasto(ses.pocoes, nomeItem)}</table>` : '<div class="hint">Nada gasto ainda.</div>')
-      + `</div></div>`;
+      + `<div class="u-dsec">Gastos na sessão</div>`
+      + (ses && (gasto(ses.bolas, nomeBola) || gasto(ses.pocoes, nomeItem)) ? `<table class="u-tab"><tr><th>Usado</th><th class="n">Qtd</th></tr>${gasto(ses.bolas, nomeBola)}${gasto(ses.pocoes, nomeItem)}</table>` : '<div class="hint">Nada gasto ainda.</div>');
   }
   const fs = [['todos', 'Todas', caps.length], ['shiny', '✨ Shiny', caps.filter((c) => c.shiny).length], ['equipe', 'Equipe', conta('equipe')], ['colecao', 'Coleção', conta('colecao')], ['depot', 'Depot', conta('depot')], ['fora', 'Saíram', conta('fora')]];
   const f = filtro || 'todos';
