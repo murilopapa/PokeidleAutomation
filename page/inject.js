@@ -307,6 +307,16 @@
   function snGravarGastos() { try { localStorage.setItem(SN_CHAVE_GASTOS, JSON.stringify(snGastos)); } catch (_) { /* ok */ } }
 
   /** Quantas unidades ainda cabem (teto do dia, reserva de Coins e saldo). */
+  // Por que snCabe deu zero, em palavras.
+  function snPorque(moeda, preco) {
+    const c = snCfg(), m = c.moedas?.[moeda];
+    if (!m?.on) return `${moedaTxt(moeda)} está desligado no sniper`;
+    const teto = Number(m.tetoDia) || 0;
+    if (teto <= 0) return `o teto de 24 h de ${moedaTxt(moeda)} está em 0`;
+    const usado = snGastoDia()[moeda] || 0;
+    if (teto - usado < preco) return `o teto de 24 h já foi gasto (${fmtN(usado)} de ${fmtN(teto)})`;
+    return `saldo de ${moedaTxt(moeda)} insuficiente`;
+  }
   function snCabe(moeda, preco, qtd) {
     const c = snCfg();
     const m = c.moedas?.[moeda];
@@ -483,7 +493,7 @@
     SN.agendados.delete(c.id);
     if (!snCompra()) { snLog('info', `${c.nome}: cancelado (sniper ou automação desligados)`); return; }
     const qtd = snCabe(c.moeda, c.preco, c.qtd);
-    if (qtd < 1) { snLog('pulado', `${c.nome}: estourou o teto do dia ou o saldo`); return; }
+    if (qtd < 1) { snLog('pulado', `${c.nome} por ${fmtN(c.preco)} ${moedaTxt(c.moeda)}: não comprei, ${snPorque(c.moeda, c.preco)}`); return; }
     if (!sendGame(P.out.mercadoComprar(c.id, qtd, c.preco, c.moeda))) { snLog('erro', `${c.nome}: jogo desconectado`); return; }
     const p = { ...c, qtd, t: Date.now(), valor: qtd * c.preco };
     snGastos.push({ t: Date.now(), moeda: c.moeda, valor: p.valor, id: c.id }); // reserva; devolve se perder

@@ -294,7 +294,11 @@ check('simular: anota o fragmento de bike barato em Gemas (vs últimas vendas e 
 await shot('sniper-simular.png');
 // modo comprar (com a chave Automação da conta ligada)
 if (!(await ui.isChecked(`[data-master="${iSn}"]`))) await ui.click(`.slot[data-slot="${iSn}"] .bar label.sw`);
-await ui.evaluate((i) => { mudarSniper(i, { modo: 'comprar' }); }, iSn);
+// teto em 0 com modo comprar: o painel avisa que não vai comprar
+await ui.evaluate((i) => { mudarSniper(i, { moedas: { orb: { on: true, tetoDia: 0 } } }); mudarSniper(i, { modo: 'comprar' }); }, iSn); await sleep(500);
+check('teto 0 no modo comprar: painel avisa que não compra', /teto de 24 h de Gemas está em 0/.test(await ovTexto()), (await ovTexto()).replace(/\s+/g, ' ').slice(0, 300));
+check('olhados mostram até quanto ele compra', /compra até/.test(await ovTexto()));
+await ui.evaluate((i) => { mudarSniper(i, { moedas: { orb: { on: true, tetoDia: 100 } } }); }, iSn);
 await sleep(28000);
 const comprasSn = mockOut.split('\n').filter((l) => l.startsWith('MERCADO compra'));
 const snLog2 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);

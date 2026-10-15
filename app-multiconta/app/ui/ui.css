@@ -420,7 +420,7 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .am.desl.on i[data-amt]::after{background:var(--mid)}
 
 .sn-olh{margin-top:8px;border:1px solid var(--line);border-radius:8px;max-height:160px;overflow:auto;font-size:11.5px}
-.sn-oh,.sn-or{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr)) 64px;gap:8px;padding:3px 8px;align-items:center}
+.sn-oh,.sn-or{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr)) 64px;gap:8px;padding:3px 8px;align-items:center}
 .sn-oh{position:sticky;top:0;background:var(--card);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
 .sn-or{border-top:1px solid var(--line);color:var(--mid)}
 .sn-or span,.sn-oh span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

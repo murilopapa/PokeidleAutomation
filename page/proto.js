@@ -26,7 +26,7 @@ window.__PIE_PROTO = {
     buyBall: (id, qty) => ({ t: 'shop.buy', kind: 'ball', id, qty }),
     selectHunt: (slug) => ({ t: 'hunt.select', slug }),
     // Mercado da Comunidade (as mesmas mensagens da tela do Mercado)
-    mercadoItens: () => ({ t: 'market.itens', elemento: '', categoria: '' }),
+    mercadoItens: () => ({ t: 'market.itens' }), // a vitrine inteira (o jogo 1.291 trocou o filtro para `elementos`)
     mercadoItem: (itemId, moeda) => ({ t: 'market.item', itemId, moeda }),
     // últimas vendas de um item numa moeda (a "Tabela de preços" do jogo, filtrada)
     mercadoHistorico: (itemId, moeda, seq) => ({ t: 'market.historicoGlobal', pagina: 0, seq, tipo: 'item', itemId, moeda }),

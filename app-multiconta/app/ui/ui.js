@@ -396,7 +396,7 @@ function barHTML(i) {
     ${chip('bola', 'Bola', bola?.enabled, `${esc(nomeCurto(bola))} &lt; ${num(bola?.min ?? 0)}`)}
     ${chip('poc', 'Poção', poc?.enabled, `${esc(nomeCurto(poc))} &lt; ${num(poc?.min ?? 0)}`)}
     ${chip('mapa', 'Mapa', c.autoHunt?.enabled, 'top 1')}
-    ${chip('sniper', 'Sniper', c.sniper?.enabled, (() => { const n = snResumo(S[i].sniper?.hist, 24).ganhou.length; return n ? `${n} compra${n > 1 ? 's' : ''}` : c.sniper?.modo === 'comprar' ? 'comprando' : 'simulando'; })())}
+    ${chip('sniper', 'Sniper', c.sniper?.enabled, (() => { const n = snResumo(S[i].sniper?.hist, 24).ganhou.length; if (n) return `${n} compra${n > 1 ? 's' : ''}`; if (c.sniper?.modo !== 'comprar') return 'simulando'; const tr = ['orb', 'gold'].filter((m) => c.sniper.moedas?.[m]?.on); return !tr.length || tr.some((m) => !(Number(c.sniper.moedas[m].tetoDia) > 0)) ? '⚠ teto 0' : 'comprando'; })())}
     <span class="sp"></span>
     <label class="sw master-c" title="Chave geral desta conta: sem ela nada age no jogo"><span>Automação</span><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span></label>`;
 }
@@ -448,11 +448,22 @@ function sniperHTML(i, sw, fechar) {
   const log = (st?.log ?? []).slice().reverse().slice(0, 14).map((l) => `<div class="sn-l ${SN_COR[l.tipo] || ''}"><span>${hora(l.t)}</span>${esc(l.texto)}</div>`).join('')
     || `<div class="hint" style="margin:4px">${!sn.enabled ? 'Ligue para começar a procurar.' : st?.varreduras ? `Nenhum anúncio ${sn.desconto}% abaixo da referência ainda. Veja em "Olhados agora" quanto falta em cada item.` : 'Procurando… a 1ª varredura sai em segundos.'}</div>`;
   const olh = st?.olhados ?? [];
-  const tabela = olh.length ? `<div class="sn-olh"><div class="sn-oh"><span>Olhados agora (o mais barato de cada item)</span><span>preço</span><span>últimas vendas</span><span>vitrine</span><span>abaixo</span></div>${olh.map((o) => `<div class="sn-or ${o.pct >= sn.desconto ? 'bom' : ''}"><span>${esc(o.nome)}${o.moeda === 'orb' ? ' <small>Gemas</small>' : ''}</span><span>${num(o.menor)}</span><span>${o.medVen != null ? num(o.medVen) : '—'}</span><span>${o.medVit != null ? num(o.medVit) : '—'}</span><b>${o.ref ? (o.pct > 0 ? `−${o.pct}%` : `+${-o.pct}%`) : 'sem ref.'}</b></div>`).join('')}</div>` : '';
+  const tabela = olh.length ? `<div class="sn-olh"><div class="sn-oh"><span>Olhados agora (o mais barato de cada item)</span><span>preço</span><span>últimas vendas</span><span>vitrine</span><span title="O preço que o sniper aceita: ${sn.desconto}% abaixo da referência">compra até</span><span>abaixo</span></div>${olh.map((o) => `<div class="sn-or ${o.pct >= sn.desconto ? 'bom' : ''}"><span>${esc(o.nome)}${o.moeda === 'orb' ? ' <small>Gemas</small>' : ''}</span><span>${num(o.menor)}</span><span>${o.medVen != null ? num(o.medVen) : '—'}</span><span>${o.medVit != null ? num(o.medVit) : '—'}</span><span>${o.ref ? num(Math.floor(o.ref * (1 - sn.desconto / 100))) : '—'}</span><b>${o.ref ? (o.pct > 0 ? `−${o.pct}%` : `+${-o.pct}%`) : 'sem ref.'}</b></div>`).join('')}</div>` : '';
+  // Avisos do que impede uma compra de verdade (o sniper acha, mas não compra).
+  const travas = [];
+  if (sn.enabled && sn.modo === 'comprar') {
+    if (!c.enabled) travas.push('A chave "Automação" desta conta está desligada.');
+    const ligadas = ['orb', 'gold'].filter((m) => sn.moedas[m]?.on);
+    if (!ligadas.length) travas.push('Nenhuma moeda ligada: marque Gemas ou Coins lá embaixo.');
+    for (const m of ligadas) if (!(Number(sn.moedas[m].tetoDia) > 0)) travas.push(`O teto de 24 h de ${m === 'orb' ? 'Gemas' : 'Coins'} está em 0: ele acha mas não compra. Coloque quanto pode gastar por dia.`);
+    if (!sn.alvos.length) travas.push('Nenhum item marcado para procurar.');
+  }
+  const avisoTravas = travas.length ? `<div class="res bad">${travas.join('<br>')}</div>` : '';
   const status = st?.ultimaVarredura ? `Última varredura ${hora(st.ultimaVarredura)} · ${st.varreduras} varreduras · ${st.candidatos} item(ns) mudaram na última · ${st.respostas || 0} listas de item lidas${st.agendados ? ` · <b>${st.agendados} compra(s) agendada(s)</b>` : ''}` : '';
   const abas = `<div class="sn-abas"><button data-sntab="config" class="${snAba === 'config' ? 'on' : ''}">Ajustes e agora</button><button data-sntab="compras" class="${snAba === 'compras' ? 'on' : ''}">Compras${(() => { const n = snResumo(st?.hist, 24).ganhou.length; return n ? ` <b>${n}</b>` : ''; })()}</button></div>`;
   if (snAba === 'compras') return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>${abas}${comprasHTML(i, st)}`;
   return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>${abas}
+    ${avisoTravas}
     ${outra >= 0 && !sn.enabled ? `<div class="res">O sniper está ligado em ${nomeConta(outra)}. Ligar aqui desliga lá (só uma conta caça por vez, para não disputar o mesmo anúncio).</div>` : ''}
     <div class="g4">
       <label class="field">Modo<select data-snmodo="${i}"><option value="simular" ${sn.modo !== 'comprar' ? 'selected' : ''}>Simular (só anota)</option><option value="comprar" ${sn.modo === 'comprar' ? 'selected' : ''}>Comprar</option></select></label>
