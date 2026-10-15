@@ -783,7 +783,11 @@ const ACHADOS = [
   ['ticketMistico', 'Mystic Ticket'], ['ticketSafari', 'Safari Ticket'], ['fragOvoShiny', 'Frag. ovo shiny'],
 ];
 const ONDE = { equipe: 'na equipe', colecao: 'na Coleção', depot: 'no Depot', chegando: 'chegando', fora: 'saiu da conta' };
-let uDet = null;          // Ultra eco: "Ver tudo" aberto { i, aba: 'capturas'|'itens', filtro }
+let uDet = null;
+let ORIGEM_JOGO = 'https://pokeidle.io';
+// ícone de item/bola do próprio jogo; se não carregar, some (sem ícone quebrado)
+const ico = (src, cls = '') => (src ? `<img class="u-ico ${cls}" data-ico alt="" src="${esc(ORIGEM_JOGO + src)}">` : `<span class="u-ico vazio ${cls}"></span>`);
+document.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG' && t.dataset?.ico != null) t.classList.add('falhou'); }, true);          // Ultra eco: "Ver tudo" aberto { i, aba: 'capturas'|'itens', filtro }
 const ICONE_FEED = { captura: '●', shiny: '✨', drop: '◆', boss: '♛', desmaio: '✖' };
 const tempoCurto = (ms) => { const m = Math.floor(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`; };
 const horaCurta = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -812,7 +816,9 @@ function consumiveis(i, kind) {
     const nome = kind === 'ball' ? (cat?.bolas?.find((b) => b.id === Number(id))?.nome || `Bola ${id}`) : (cat?.items?.[id]?.name || `Item ${id}`);
     const q = estoque(i, kind, id) ?? 0;
     const pouco = q < Math.max(1, r?.enabled && Number(r.refId) === Number(id) ? r.min : kind === 'ball' ? 50 : 20);
-    return { id, nome, q, pouco };
+    const b = snap?.bolsa;
+    const ic = (kind === 'ball' ? b?.bolas : b?.cura)?.find((x) => Number(x.id) === Number(id))?.ico ?? null;
+    return { id, nome, q, pouco, ico: ic };
   });
 }
 // Todas as bolas que a conta tem (as escolhidas no automático primeiro, marcadas).
@@ -868,8 +874,8 @@ function cartaoUltra(d) {
   const pk = d.pk, ses = d.ses;
   const outros = d.team.filter((p) => p !== pk);
   const num2 = (v, est) => (v == null ? '—' : (est ? '≈ ' : '') + curto(v));
-  const cons = (lista, tipo) => lista.map((x) => `<span class="u-cons ${tipo} ${x.pouco ? 'pouco' : ''} ${tipo === 'poc' || x.sel ? 'sel' : ''}" title="${x.pouco ? 'Está acabando' : tipo === 'poc' || x.sel ? 'Escolhida para usar no automático' : 'Na bolsa'}"><i></i><b>${num(x.q)}</b> ${esc(x.nome)}</span>`).join('');
-  const chipsBolsa = (lista, cls, rot) => (lista?.length ? `<div class="u-bolsa ${cls}" data-udet="${i}|bolsa" title="Ver a bolsa"><small>${rot}</small>${lista.slice(0, 8).map((x) => `<span>${esc(x.nome)}${x.q > 1 ? ` <b>×${num(x.q)}</b>` : ''}</span>`).join('')}${lista.length > 8 ? `<span class="mais">+${lista.length - 8}</span>` : ''}</div>` : '');
+  const cons = (lista, tipo) => lista.map((x) => `<span class="u-it ${x.pouco ? 'pouco' : ''} ${tipo === 'poc' || x.sel ? 'sel' : ''}" title="${esc(x.nome)}${x.pouco ? ' · está acabando' : tipo === 'poc' || x.sel ? ' · em uso no automático' : ''}">${ico(x.ico)}<b>${num(x.q)}</b></span>`).join('');
+  const chipsBolsa = (lista, cls, rot) => (lista?.length ? `<div class="u-grupo ${cls}" data-udet="${i}|bolsa" title="Ver a bolsa"><small>${rot} <b>${num(lista.reduce((t, x) => t + x.q, 0))}</b></small><div class="u-its">${lista.map((x) => `<span class="u-it" title="${esc(x.nome)}">${ico(x.ico)}<b>${num(x.q)}</b></span>`).join('')}</div></div>` : '');
   const caps = d.capturas.slice(0, 7);
   return `<div class="u-cab2"><span class="dot ${d.cls === 'ok' ? 'hunt' : d.cls === 'bad' ? 'bad' : 'fight'}"></span><b>${nomeConta(i)}</b><small>Nv ${num(snap.level)}</small>`
     + `${d.bonus.map((x) => `<span class="u-bn">${esc(x)}</span>`).join('')}<span class="sp"></span><span class="u-st ${d.cls}">${esc(d.st)}</span><button class="u-ver" data-udet="${i}|capturas" title="Capturas, itens e gastos desta conta">Ver tudo</button></div>`
@@ -882,10 +888,9 @@ function cartaoUltra(d) {
     + `<div class="u-nums"><div><small>XP/h${d.xp == null && d.xpEst != null ? ' (estim.)' : ''}</small><b class="xp">${num2(d.xp ?? d.xpEst, d.xp == null && d.xpEst != null)}</b></div>`
     + `<div><small>Ouro/h</small><b class="ouro">${num2(d.ouroH)}</b></div><div><small>Abates/h</small><b>${num2(d.abH)}</b></div></div>`
     + `<div class="u-sal"><span>Ouro <b>${curto(snap.gold)}</b></span><span>Gemas <b>${num(snap.orbs)}</b></span>${snap.diamonds ? `<span>Diamantes <b>${num(snap.diamonds)}</b></span>` : ''}</div>`
-    + `<div class="u-sal">${cons(d.bolas, 'bola') || '<span>nenhuma bola</span>'}</div><div class="u-sal">${cons(d.pocs, 'poc') || '<span>nenhuma poção escolhida</span>'}</div>`
-    + (ses ? `<div class="u-ses"><span>Sessão <b>${tempoCurto(ses.ms)}</b></span><span><b>${num(ses.abates)}</b> abates</span><span><b>${num(ses.capturas)}</b> capturas</span>${ses.shinies || ses.shiniesVistos ? `<span class="sh">✨ <b>${ses.shinies}</b>/${ses.shiniesVistos} shiny</span>` : ''}${d.desmaiosH ? `<span class="bad"><b>${d.desmaiosH}</b> desmaio${d.desmaiosH > 1 ? 's' : ''} na última hora</span>` : ''}</div>` : '')
-    + (d.achados.length ? `<div class="u-ach" title="Achados raros desta sessão"><small>Na sessão</small>${d.achados.map(([n, q]) => `<span>${esc(n)} <b>×${num(q)}</b></span>`).join('')}</div>` : '')
-    + chipsBolsa(d.bolsa?.raros, 'raros', 'Itens raros na bolsa') + chipsBolsa(d.bolsa?.pedras, 'pedras', 'Pedras na bolsa')
+    + `<div class="u-grupo"><small>Pokébolas</small><div class="u-its">${cons(d.bolas, 'bola') || '<span class="hint">nenhuma</span>'}</div></div>`
+    + `<div class="u-grupo"><small>Poções em uso</small><div class="u-its">${cons(d.pocs, 'poc') || '<span class="hint">nenhuma escolhida</span>'}</div></div>`
+    + chipsBolsa(d.bolsa?.raros, 'raros', 'Itens raros') + chipsBolsa(d.bolsa?.pedras, 'pedras', 'Pedras')
     + (caps.length ? `<div class="u-caps" data-udet="${i}|capturas" title="Ver todas as capturas">${caps.map((p) => `<span class="u-cap ${p.shiny ? 'sh' : ''} ${p.onde}" title="${esc(p.nome)} Nv ${num(p.level)} · ${ONDE[p.onde]}">${retratoPk(p)}<i></i></span>`).join('')}<span class="u-mais">ver tudo ›</span></div>` : '')
     + (d.feed.length ? `<div class="u-feed">${d.feed.map((f) => `<div class="${f.tipo}"><small>${horaCurta(f.t)}</small> ${ICONE_FEED[f.tipo] || '·'} ${esc(f.texto)}</div>`).join('')}</div>` : '')
     + chaves;
@@ -895,14 +900,15 @@ function detalheHTML(i, aba, filtro) {
   const s = S[i], snap = s.snap || {}, ses = snap.sessao, cat = s.catalog;
   const caps = snap.capturas || [];
   const conta = (o) => caps.filter((c) => c.onde === o).length;
-  const abas = `<div class="sn-abas"><button class="${aba === 'capturas' ? 'on' : ''}" data-udet="${i}|capturas">Capturas <b>${caps.length}</b></button><button class="${aba === 'bolsa' ? 'on' : ''}" data-udet="${i}|bolsa">Bolsa</button><button class="${aba === 'itens' ? 'on' : ''}" data-udet="${i}|itens">Sessão e gastos</button></div>`;
-  const cab = `<div class="ph2"><span>${nomeConta(i)} · tudo da sessão</span><button class="ib" data-ufechar="1" title="Fechar (Esc)">${ICON.x}</button></div>${abas}`;
+  const abas = `<div class="sn-abas"><button class="${aba === 'capturas' ? 'on' : ''}" data-udet="${i}|capturas">Capturas <b>${caps.length}</b></button><button class="${aba === 'bolsa' ? 'on' : ''}" data-udet="${i}|bolsa">Bolsa</button></div>`;
+  const cab = `<div class="ph2"><span>${nomeConta(i)}</span><button class="ib" data-ufechar="1" title="Fechar (Esc)">${ICON.x}</button></div>${abas}`;
   if (aba === 'bolsa') {
     const b = snap.bolsa || { bolas: [], raros: [], pedras: [] };
     const sel = new Set(consumiveis(i, 'ball').map((x) => Number(x.id)));
-    const tab = (lista, vazio, marca) => (lista.length ? `<table class="u-tab"><tr><th>Item</th><th class="n">Qtd</th></tr>${lista.map((x) => `<tr><td>${esc(x.nome)}${marca && marca(x) ? ' <span class="u-onde equipe">em uso</span>' : ''}</td><td class="n">${num(x.q)}</td></tr>`).join('')}</table>` : `<div class="hint">${vazio}</div>`);
-    return cab + `<div class="u-dcols3"><div><div class="u-dsec">Pokébolas</div>${tab(b.bolas, 'Nenhuma bola.', (x) => sel.has(Number(x.id)))}<div class="u-dsec">Poções escolhidas</div>${tab(consumiveis(i, 'item').map((x) => ({ nome: x.nome, q: x.q })), 'Nenhuma escolhida.')}</div>`
-      + `<div><div class="u-dsec">Itens raros</div>${tab(b.raros, 'Nenhum item raro.')}</div><div><div class="u-dsec">Pedras</div>${tab(b.pedras, 'Nenhuma pedra.')}</div></div>`;
+    const tab = (lista, vazio, marca) => (lista.length ? `<table class="u-tab"><tr><th></th><th>Item</th><th class="n">Qtd</th></tr>${lista.map((x) => `<tr><td class="u-tico">${ico(x.ico)}</td><td>${esc(x.nome)}${marca && marca(x) ? ' <span class="u-onde equipe">em uso</span>' : ''}</td><td class="n">${num(x.q)}</td></tr>`).join('')}</table>` : `<div class="hint">${vazio}</div>`);
+    const total = (l) => num(l.reduce((t, x) => t + x.q, 0));
+    return cab + `<div class="u-dcols3"><div><div class="u-dsec">Pokébolas</div>${tab(b.bolas, 'Nenhuma bola.', (x) => sel.has(Number(x.id)))}<div class="u-dsec">Poções e revives</div>${tab(b.cura || [], 'Nenhuma.', (x) => consumiveis(i, 'item').some((c) => Number(c.id) === Number(x.id)))}</div>`
+      + `<div><div class="u-dsec">Itens raros <small>${total(b.raros)} no total</small></div>${tab(b.raros, 'Nenhum item raro.')}</div><div><div class="u-dsec">Pedras <small>${total(b.pedras)} no total</small></div>${tab(b.pedras, 'Nenhuma pedra.')}</div></div>`;
   }
   if (aba === 'itens') {
     const nomeBola = (id) => cat?.bolas?.find((b) => b.id === Number(id))?.nome || `Bola ${id}`;
@@ -947,15 +953,16 @@ function renderUltra() {
   for (let i = 0; i < N; i++) if (S[i] && !S[i].desligada) ligadas.push(i);
   const dados = ligadas.map(ultraDados);
   const soma = (f) => dados.reduce((t, d) => t + (Number(f(d)) || 0), 0);
+  const somaBolsa = (k) => soma((d) => (d.bolsa?.[k] || []).reduce((t, x) => t + x.q, 0));
   const tot = {
     ouroH: soma((d) => d.ouroH), xp: soma((d) => d.xp ?? d.xpEst),
-    cap: soma((d) => d.ses?.capturas), sh: soma((d) => d.ses?.shinies),
-    ach: soma((d) => (d.achados || []).reduce((t, [, q]) => t + q, 0)), gemas: soma((d) => (d.carregando ? 0 : S[d.i].snap?.orbs)),
+    ouro: soma((d) => (d.carregando ? 0 : S[d.i].snap?.gold)), gemas: soma((d) => (d.carregando ? 0 : S[d.i].snap?.orbs)),
+    raros: somaBolsa('raros'), pedras: somaBolsa('pedras'),
   };
   const esq = `<div class="u-tot"><div class="u-tit">Ultra eco<small>os jogos seguem rodando, só não são desenhados</small></div>`
     + `<div><small>Ouro/h</small><b class="ouro">${curto(tot.ouroH)}</b></div><div><small>XP/h somado</small><b class="xp">${curto(tot.xp)}</b></div>`
-    + `<div><small>Capturas na sessão</small><b>${num(tot.cap)}${tot.sh ? ` <span class="sh">✨${tot.sh}</span>` : ''}</b></div>`
-    + `<div><small>Achados</small><b>${num(tot.ach)}</b></div><div><small>Gemas</small><b>${num(tot.gemas)}</b></div>`
+    + `<div><small>Ouro (todas)</small><b class="ouro">${curto(tot.ouro)}</b></div><div><small>Gemas (todas)</small><b>${num(tot.gemas)}</b></div>`
+    + `<div><small>Itens raros</small><b>${num(tot.raros)}</b></div><div><small>Pedras</small><b>${num(tot.pedras)}</b></div>`
     + `<span class="sp"></span><div class="u-b"><button data-modo="eco">Ver os jogos (Eco)</button><button data-modo="normal" class="ghost">Normal</button></div></div>`;
   const forma = `${ligadas.join(',')}`;
   if (el.dataset.forma !== forma || !el.querySelector('.u-tot')) {
@@ -1365,6 +1372,7 @@ app.kick.onAudio((m) => { KKSOM = m || {}; renderKickDock(); renderKkVer(); });
   KK = est.kick || KK;
   ZOOMKK = est.zoomKick || 1;
   MODO = est.modo || null;
+  if (est.origemJogo) ORIGEM_JOGO = est.origemJogo;
   ATT = est.att || null;
   renderAtt();
   // o que já chegou ao vivo (antes desta resposta) vale mais que o guardado

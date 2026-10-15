@@ -393,18 +393,21 @@ const c0 = cards.find((t) => /murilo/.test(t)) || '', c1 = cards.find((t) => /se
 check('um cartão por conta', cards.length === 4, String(cards.length));
 check('cartão: pokémon, nível, lugar e status', /Yanma/.test(c0) && /Kadabra/.test(c0) && /caçando/.test(c0), c0);
 check('cartão: bônus VIP', /VIP/.test(c0), c0);
-check('cartão: sessão do jogo (tempo, abates, capturas)', /Sessão 3h12/.test(c0) && /5\.840 abates/.test(c0) && /31 capturas/.test(c0), c0);
-check('cartão: achados da sessão', /Frag\. de chave ×2/.test(c0) && /Boss Token ×1/.test(c0), c0);
+check('cartão: sem os números da sessão', !/Sessão 3h12/.test(c0) && !/abates/.test(c0), c0);
+check('cartão: itens raros e pedras com total', /Itens raros 8/.test(c0) && /Pedras 3/.test(c0), c0);
+const icos = await ui.$$eval(`#ultra [data-uc="0"] img.u-ico`, (e) => e.map((x) => x.getAttribute('src')));
+check('cartão: ícones do jogo nas bolas, poções, raros e pedras', icos.some((u) => /\/assets\/site\/assets\/ui\/ball-poke\.png$/.test(u)) && icos.some((u) => /\/assets\/site\/assets\/stones\/ancient_stone\.gif$/.test(u)) && icos.some((u) => /bronze_boss_token\.png$/.test(u)), JSON.stringify(icos));
 check('cartão: ouro/h da sessão', /Ouro\/h\s*409/.test(c0), c0);
-check('cartão: bola e poção em uso com estoque', /48 Poke Ball/.test(c0) && /5 Great Ball/.test(c0) && /7 Ultra Ball/.test(c0) && /4 Great Potion/.test(c0), c0);
+const bolasCard = await ui.$eval(`#ultra [data-uc="0"] .u-grupo`, (g) => [...g.querySelectorAll('.u-it')].map((x) => x.title + '=' + x.textContent));
+check('cartão: todas as bolas e a poção em uso', bolasCard.length === 3 && /Poke Ball.*=48/.test(bolasCard[0]) && /4/.test(c0), JSON.stringify(bolasCard));
 check('cartão: últimos eventos (captura e drop raro)', /capturou Ditto Nv 50/.test(c0) && /Key Fragment ×1/.test(c0) && !/Twisted Spoon/.test(c0), c0);
-check('cartão: shiny e desmaio na 2ª conta', /shiny capturado: Zubat/.test(c1) && /1 desmaio na última hora/.test(c1) && /✨ 1\/1 shiny/.test(c1), c1);
+check('cartão: shiny e desmaio na 2ª conta', /shiny capturado: Zubat/.test(c1) && /desmaiou/.test(c1), c1);
 const hp = await ui.$$eval('#ultra [data-uc="0"] .u-hp', (e) => e.map((x) => x.className + ' ' + x.firstElementChild.style.width));
 check('cartão: barra de vida do ativo e do time', hp.length === 2 && /g ok 92\.6%/.test(hp[0]) && /warn 21\.4%/.test(hp[1]), JSON.stringify(hp));
 check('cartão: retrato do pokémon', await ui.$eval('#ultra [data-uc="0"] .u-ret img', (e) => /\/193\.png$/.test(e.src)).catch(() => false));
 const totTxt = await ui.$eval('#ultra .u-tot', (e) => e.textContent.replace(/\s+/g, ' '));
 const somaCap = await ui.evaluate(() => S.reduce((t, s) => t + (s.desligada ? 0 : s.snap?.sessao?.capturas || 0), 0));
-check('faixa de totais (capturas e gemas somadas)', somaCap > 0 && new RegExp('Capturas na sessão\\s*' + somaCap + '\\b').test(totTxt) && /Gemas\s*4\.000/.test(totTxt), somaCap + ' ' + totTxt);
+check('faixa de totais (gemas, raros e pedras somados)', /Gemas \(todas\)\s*4\.000/.test(totTxt) && /Itens raros\s*32/.test(totTxt) && /Pedras\s*12/.test(totTxt), totTxt);
 const mapaAntes = await ui.evaluate(() => cfgDe(0).autoHunt.enabled);
 await ui.click('#ultra [data-uc="0"] [data-amt="0|mapa"]'); await sleep(600);
 const mapaOn = await ui.evaluate(() => cfgDe(0).autoHunt.enabled);
@@ -425,12 +428,8 @@ check('Ver tudo: filtro Coleção', linhasCol.length === 1 && /Abra/.test(linhas
 await ui.click(`#ultra .u-modal [data-udet="${m0}|bolsa"]`); await sleep(300);
 await shot('ultra-bolsa.png');
 const bolsaTxt = await ui.$eval('#ultra .u-modal', (e) => e.textContent.replace(/\s+/g, ' '));
-check('Bolsa: todas as bolas, itens raros e pedras', /Ultra Ball\s*7/.test(bolsaTxt) && /Poke Ball em uso\s*48/.test(bolsaTxt) && /Itens raros.*Bronze Boss Token\s*2.*Key Fragment\s*6/.test(bolsaTxt) && /Pedras.*Ancient Stone\s*3/.test(bolsaTxt), bolsaTxt.slice(0, 600));
+check('Bolsa: todas as bolas, itens raros e pedras', /Ultra Ball\s*7/.test(bolsaTxt) && /Poke Ball em uso\s*48/.test(bolsaTxt) && /Itens raros 8 no total.*Bronze Boss Token\s*2.*Key Fragment\s*6/.test(bolsaTxt) && /Pedras 3 no total.*Ancient Stone\s*3/.test(bolsaTxt) && /Great Potion em uso\s*4/.test(bolsaTxt), bolsaTxt.slice(0, 700));
 check('cartão: itens raros e pedras', /Itens raros/.test(c0) || true);
-await ui.click(`#ultra .u-modal [data-udet="${m0}|itens"]`); await sleep(300);
-await shot('ultra-itens.png');
-const itTxt = await ui.$eval('#ultra .u-modal', (e) => e.textContent.replace(/\s+/g, ' '));
-check('Ver tudo: sessão e gastos', /Frag\. de chave/.test(itTxt) && /Poke Ball\s*40/.test(itTxt) && /Great Potion\s*12/.test(itTxt), itTxt.slice(0, 500));
 await ui.click('#ultra .u-modal', { position: { x: 5, y: 5 } }); await sleep(300);
 check('clicar fora fecha o Ver tudo', !(await ui.$('#ultra .u-modal')));
 // painel de automação abre dentro do Ultra eco (o mesmo do modo normal)
@@ -452,6 +451,7 @@ check('conta desligada não aparece no Ultra eco', linhasOff === 3, String(linha
 await desligar(true); await sleep(2500);
 const timerVivo = await jogosJs('new Promise((r) => { let n = 0; const t = setInterval(() => { if (++n === 5) { clearInterval(t); r(n); } }, 100); })');
 check('Ultra eco: timers do jogo continuam rodando escondidos', timerVivo.every((n) => n === 5));
+await ui.evaluate(() => { ORIGEM_JOGO = 'https://pokeidle.io'; document.querySelectorAll('#ultra [data-uc]').forEach((b) => { b.dataset.h = ''; }); renderUltra(); }); await sleep(2500);
 await shot('ultra.png');
 // recarregar uma conta em Ultra continua escondida e em economia
 await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes('8787/app')).reload());

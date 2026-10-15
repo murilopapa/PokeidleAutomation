@@ -387,6 +387,7 @@ ipcMain.on('ov:evento', (e, ev) => { if (ov && e.sender === ov.webContents) ui('
 
 ipcMain.handle('ui:estado', () => ({
   slots: SLOTS,
+  origemJogo: new URL(GAME_URL).origin,
   zoomKick: Number(appCfg.zoomKick) || 1,
   modo: appCfg.modo ? modo() : null,
   att: atualizador?.estado() ?? null,

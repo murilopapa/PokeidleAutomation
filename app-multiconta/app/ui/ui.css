@@ -485,3 +485,21 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .u-dcols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
 .u-ach{align-items:center}
 .u-ach small{font-size:10.5px;margin-right:2px}
+/* Ultra eco: bolsa com os ícones do jogo */
+.u-grupo{display:flex;flex-direction:column;gap:4px}
+.u-grupo[data-udet]{cursor:pointer}
+.u-grupo>small{font-size:10.5px;color:var(--muted)}
+.u-grupo>small b{color:var(--fg);font-size:11px}
+.u-its{display:flex;flex-wrap:wrap;gap:5px}
+.u-it{display:flex;align-items:center;gap:4px;padding:2px 7px 2px 3px;border-radius:8px;background:#111a30;border:1px solid #1f2a47;font-size:12px}
+.u-it b{color:var(--fg);font-weight:650}
+.u-it.sel{border-color:#3a5590;background:#16234a}
+.u-it.pouco b{color:var(--warn)}
+.u-grupo.raros .u-it{border-color:#25335a}
+.u-grupo.pedras .u-it{background:#0f1d18;border-color:#1f4a35}
+.u-ico{width:22px;height:22px;object-fit:contain;image-rendering:pixelated;flex:none}
+.u-ico.vazio,.u-ico.falhou{display:inline-block;width:22px;height:22px;border-radius:6px;background:#1b2540;content:''}
+img.u-ico.falhou{visibility:hidden}
+.u-tico{width:30px}
+.u-tico .u-ico{width:24px;height:24px}
+.u-dsec small{font-weight:500;color:var(--muted);margin-left:4px}

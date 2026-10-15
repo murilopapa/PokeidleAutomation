@@ -586,7 +586,7 @@
   }
 
   const itemResumo = (i) => ({
-    name: i.name, category: i.category, rare: !!i.rare, npcPrice: i.npcPrice ?? null, priceGold: i.priceGold ?? null,
+    name: i.name, category: i.category, rare: !!i.rare, icon: i.icon ?? null, npcPrice: i.npcPrice ?? null, priceGold: i.priceGold ?? null,
     healAmount: i.healAmount ?? null, healPct: i.healPct ?? null, revivePct: i.revivePct ?? null,
   });
   // items.json (espelho) + itens próprios do welcome, no mesmo mapa (como o jogo faz).
@@ -807,17 +807,33 @@
   // do categoriaBolsa do jogo: boss token, fragmentos, Exp. Share, Name Tag, peças/discos de TM,
   // Ficha PvP, itens-chave raros 70000–70099; pedra = categoria stone, menos a sucata).
   const RAROS_IDS = new Set([70001, 70011, 70012, 70013, 70016, 70050, 59194, 40530, 70040, 70041, 70042, 70043, 70044, 70080, 70081, 70082, 70083, 70084]);
+  // Ícones: o mesmo caminho que o jogo monta (srcIcone + caminhoIconeRel), relativo ao site.
+  const SPRITE_BOLA = { 1: 'site/assets/ui/ball-poke.png', 2: 'site/assets/ui/ball-great.png', 3: '/img/ball-super.png', 4: 'site/assets/ui/ball-ultra.png', 5: '/img/ball-beast.png' };
+  const ICONES_FIXOS = { 30: 'site/assets/items/dark_gem.png', 63: 'site/assets/items/goggles.png', 47: 'site/assets/items/farfetchd_stick.png', 5041: 'site/assets/items/farfetchd_stick.png', 70070: '/img/itens/golden-potion.png' };
+  const srcIcone = (rel) => (!rel ? null : rel.startsWith('/') ? rel : '/assets/' + rel);
+  function iconeItem(id, it) {
+    if (ICONES_FIXOS[id]) return srcIcone(ICONES_FIXOS[id]);
+    const icon = it?.icon;
+    if (!icon) return null;
+    if (/^\/(img|assets\/site)\//.test(icon)) return icon;
+    if (icon.startsWith('site/')) return '/assets/' + icon;
+    if (icon.startsWith('/')) return '/assets/site' + icon;
+    return '/assets/site/assets/items/' + icon;
+  }
+  const iconeBola = (id) => srcIcone(SPRITE_BOLA[id] ?? SPRITE_BOLA[1]);
   function bolsa(e) {
-    const out = { bolas: [], raros: [], pedras: [] };
-    for (const b of S.catalog?.bolas ?? []) { const q = Number(e.balls?.[b.id]) || 0; if (q > 0) out.bolas.push({ id: b.id, nome: b.nome, q }); }
+    const out = { bolas: [], raros: [], pedras: [], cura: [] };
+    for (const b of S.catalog?.bolas ?? []) { const q = Number(e.balls?.[b.id]) || 0; if (q > 0) out.bolas.push({ id: b.id, nome: b.nome, q, ico: iconeBola(b.id) }); }
     for (const [k, v] of Object.entries(e.items ?? {})) {
       const q = Number(v) || 0, id = Number(k);
       if (q <= 0) continue;
       const it = S.items?.[id];
       const nome = it?.name ?? 'Item ' + id;
       const raro = /boss token$/i.test(nome) || RAROS_IDS.has(id) || it?.category === 'tm' || (id >= 70000 && id < 70100 && it?.category === 'key-item' && it?.rare);
-      if (raro) out.raros.push({ id, nome, q });
-      else if (it?.category === 'stone' && nome.toLowerCase() !== 'rough gemstone') out.pedras.push({ id, nome, q });
+      const ent = { id, nome, q, ico: iconeItem(id, it) };
+      if (it?.category === 'heal' || it?.category === 'revive') out.cura.push(ent);
+      else if (raro) out.raros.push(ent);
+      else if (it?.category === 'stone' && nome.toLowerCase() !== 'rough gemstone') out.pedras.push(ent);
     }
     for (const c of e.caixas?.minhas ?? []) out.raros.push({ id: 'cx' + c.id, nome: `Caixa de Fundador #${c.numero ?? c.id}`, q: 1 });
     for (const c of e.casa?.lista ?? []) out.raros.push({ id: 'casa' + c.id, nome: `Casa${c.rar ? ' ' + c.rar : ''} #${c.id}`, q: 1 });
