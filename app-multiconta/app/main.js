@@ -411,7 +411,13 @@ ipcMain.on('ui:layout', (_e, rects) => {
 
 function posicionarOverlay() {
   if (!ov) return;
-  const b = ovSlot != null ? limites[ovSlot] : null;
+  if (ovSlot === -1 && win && modo() !== 'ultra') {   // janela inteira (compras automáticas)
+    const [w, h] = win.getContentSize();
+    ov.setBounds({ x: 0, y: 0, width: w, height: h });
+    ov.setVisible(true);
+    return;
+  }
+  const b = ovSlot != null && ovSlot >= 0 ? limites[ovSlot] : null;
   if (!b || b.mini || b.oculto || modo() === 'ultra') { ov.setVisible(false); return; }
   ov.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height });
   ov.setVisible(true);
@@ -419,7 +425,7 @@ function posicionarOverlay() {
 // A interface manda o menu aberto (ou null). O jogo de baixo continua visível e rodando.
 ipcMain.on('ui:overlay', (_e, msg) => {
   if (!ov) return;
-  ovSlot = msg && msg.slot >= 0 && msg.slot < SLOTS ? msg.slot : null;
+  ovSlot = msg && msg.slot >= -1 && msg.slot < SLOTS ? msg.slot : null;
   ov.webContents.send('ov:conteudo', ovSlot == null ? null : { kind: msg.kind, html: String(msg.html || '') });
   posicionarOverlay();
   if (ovSlot != null && msg.kind !== 'pop') ov.webContents.focus();

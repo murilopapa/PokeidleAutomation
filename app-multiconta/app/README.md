@@ -33,8 +33,9 @@ O login fica guardado por quadrado.
   outras ganham o espaço) e ficam na barra "Desligadas" embaixo, com o botão Ligar. Ícone da Twitch (passe o mouse:
   lives oficiais abertas e onde você já está). Engrenagem: vincular/desvincular Twitch e
   recarregar o jogo, zoom do jogo (−/+/auto; ou Ctrl + roda do mouse / Ctrl +, Ctrl −, Ctrl 0 dentro do jogo). Botão de expandir (ou duplo clique no cabeçalho; teclas 1–4; Esc volta).
-- **Barra de baixo:** Bola, Poção e Mapa. Clique para abrir a config por cima do jogo.
-  - Bola / Poção: tipo, "comprar quando abaixo de" e lote por compra.
+- **Barra de baixo:** Compras e Mapa. Clique para abrir a config por cima do jogo.
+  - Compras: abre a janela de **Compras automáticas** (também pelo botão 🛒 do topo): uma aba por conta e uma lista de regras (Pokébola ou Item, "abaixo de" e lote por compra), quantas quiser. A bolinha do chip liga/desliga todas as da conta.
+  - As mudanças ficam em rascunho até **Aplicar** (só esta conta) ou **Aplicar em todas as contas** (copia a lista para as outras). **Descartar** volta ao que está aplicado.
   - Mapa: seu pokémon em campo e o top 3 de hunts, com o mesmo cálculo da extensão oficial do jogo
     ("/hunt for PokeIdle"). Ligado, troca para o 1º lugar que não seja ☠ (morte estimada ou golpe
     que passa do HP), só fora de combate.

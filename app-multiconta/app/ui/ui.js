@@ -20,13 +20,14 @@ const ICON = {
 };
 // Troca de mapa: sempre o 1º lugar, risco alto (aceita Segura e Tranquila), XP do pokémon.
 const AUTO_HUNT = { criterio: 'pk', riscoMax: 'alto', ganhoMin: 0 };
-const ID_BOLA = 'app-bola', ID_POCAO = 'app-pocao';
 
 let N = 4;
 const S = [];             // por conta: { snap, catalog, medidas, cfg, res, top, alerta, rAtual, calc }
 let TW = { temClientId: false, contas: [] };
 let foco = null;          // conta expandida
-let painel = null;        // { i, k: 'bola'|'poc'|'mapa' }
+let painel = null;        // { i, k: 'mapa' }
+let compras = null;       // { i }: janela das compras automáticas (conta da aba aberta)
+const RASC = [];          // rascunho da lista de compras por conta (null = sem alteração pendente)
 let menu = null;          // conta com a engrenagem aberta
 let twHover = null;       // conta com o overlay da Twitch (ou da Kick) aberto
 let popTipo = 'tw';       // 'tw' = Twitch, 'kk' = Kick
@@ -49,21 +50,18 @@ function cfgDe(i) {
   c.autoHunt = { ...c.autoHunt, ...AUTO_HUNT };
   return c;
 }
-function regra(i, id) { return cfgDe(i).rules.find((r) => r.id === id) || null; }
+// Regra de compra ligada de um tipo ('ball'|'item'): a que cobre aquele id, ou (sem id) a primeira.
+function regraDe(i, kind, refId) {
+  const l = cfgDe(i).rules.filter((r) => r.kind === kind && r.enabled);
+  return refId != null ? l.find((r) => Number(r.refId) === Number(refId)) || null : l[0] || null;
+}
 function salvarCfg(i, c) {
   c.autoHunt = { ...c.autoHunt, ...AUTO_HUNT };
   S[i].cfg = c;
   app.setCfg(i, c);
   renderSlot(i);
   if (MODO === 'ultra') renderUltra();
-}
-function mudarRegra(i, id, kind, patch) {
-  const c = cfgDe(i);
-  let r = c.rules.find((x) => x.id === id);
-  if (!r) { r = { id, kind, refId: null, label: '', min: 100, qty: 100, enabled: false }; c.rules.push(r); }
-  Object.assign(r, patch);
-  if (r.refId == null) { const o = opcoes(i, kind)[0]; if (o) { r.refId = o.id; r.label = o.nome; } }
-  salvarCfg(i, c);
+  if (compras) ovSync();
 }
 function opcoes(i, kind) {
   const cat = S[i].catalog;
@@ -403,13 +401,12 @@ function menuHTML(i) {
 
 // ---- barra de automação
 function barHTML(i) {
-  const c = cfgDe(i), bola = regra(i, ID_BOLA), poc = regra(i, ID_POCAO);
-  const nomeCurto = (r) => (r?.label || '').replace(/\s*(Ball|Potion)$/i, '') || '—';
-  const chip = (k, nome, on, res) => `<button class="am ${on ? 'on' : ''} ${c.enabled ? '' : 'desl'} ${painel?.i === i && painel.k === k ? 'open' : ''}" data-am="${i}|${k}"><i data-amt="${i}|${k}" title="${on ? 'Desligar' : 'Ligar'} (sem abrir o menu)"></i>${nome} <b>${on ? res : 'off'}</b>${ICON.car}</button>`;
+  const c = cfgDe(i);
+  const tot = c.rules.length, on = c.rules.filter((r) => r.enabled).length;
+  const chip = (attrs, aberto, nome, ligado, res, tit) => `<button class="am ${ligado ? 'on' : ''} ${c.enabled ? '' : 'desl'} ${aberto ? 'open' : ''}" ${attrs.cab}><i ${attrs.dot} title="${tit}"></i>${nome} <b>${ligado ? res : 'off'}</b>${ICON.car}</button>`;
   return `
-    ${chip('bola', 'Bola', bola?.enabled, `${esc(nomeCurto(bola))} &lt; ${num(bola?.min ?? 0)}`)}
-    ${chip('poc', 'Poção', poc?.enabled, `${esc(nomeCurto(poc))} &lt; ${num(poc?.min ?? 0)}`)}
-    ${chip('mapa', 'Mapa', c.autoHunt?.enabled, 'top 1')}
+    ${chip({ cab: `data-cp="${i}"`, dot: `data-cpt="${i}"` }, compras?.i === i, 'Compras', on > 0, `${on} de ${tot}`, `${on ? 'Desligar' : 'Ligar'} todas as compras desta conta (sem abrir)`)}
+    ${chip({ cab: `data-am="${i}|mapa"`, dot: `data-amt="${i}|mapa"` }, painel?.i === i && painel.k === 'mapa', 'Mapa', c.autoHunt?.enabled, 'top 1', `${c.autoHunt?.enabled ? 'Desligar' : 'Ligar'} (sem abrir o menu)`)}
     <span class="sp"></span>
     <label class="sw master-c" title="Chave geral desta conta: sem ela nada age no jogo"><span>Automação</span><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span></label>`;
 }
@@ -418,23 +415,80 @@ function barHTML(i) {
 function painelHTML(i, k) {
   const sw = (attr, on) => `<label class="sw" style="gap:12px"><span>Ligado</span><input type="checkbox" ${attr} ${on ? 'checked' : ''}><span class="tg"></span></label>`;
   const fechar = `<button class="ib" data-fechar="1" title="Fechar">${ICON.x}</button>`;
-  if (k === 'mapa') return mapaHTML(i, sw, fechar);
-  const kind = k === 'bola' ? 'ball' : 'item';
-  const id = k === 'bola' ? ID_BOLA : ID_POCAO;
-  const r = regra(i, id) || { min: 100, qty: 100, enabled: false, refId: null };
-  const ops = opcoes(i, kind);
-  const ref = r.refId ?? ops[0]?.id;
-  const tem = estoque(i, kind, ref);
-  const bloq = S[i].snap?.regras?.porRegra?.[id]?.bloqueadaAte;
-  const tit = k === 'bola' ? 'Compra de Pokébola' : 'Compra de Poção';
-  return `<div class="ph2"><span>${tit}</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-ron="${i}|${k}"`, r.enabled)}${fechar}</span></div>
-    <div class="${r.enabled ? '' : 'off-box'}"><div class="g4">
-      <div class="field">Tipo<select data-rref="${i}|${k}">${ops.length ? ops.map((o) => `<option value="${o.id}" ${o.id === ref ? 'selected' : ''}>${esc(o.nome)} · ${num(o.preco)} ouro</option>`).join('') : '<option>abra o jogo para listar</option>'}</select></div>
-      <div class="field">Comprar quando abaixo de<input type="number" min="1" value="${r.min}" data-rmin="${i}|${k}"></div>
-      <div class="field">Lote por compra<input type="number" min="1" value="${r.qty}" data-rqty="${i}|${k}"></div></div>
-    <div class="res">Quando ficar abaixo de <b>${num(r.min)}</b>, compra <b>${num(r.qty)}</b>.${tem != null ? ` Agora: <b>${num(tem)}</b>.` : ''}</div>
-    ${bloq && bloq > Date.now() ? '<div class="res bad">A última compra não confirmou; pausada por alguns minutos.</div>' : ''}
-    ${!cfgDe(i).enabled ? '<div class="hint">A chave "Automação" desta conta está desligada: nada é comprado até ligar.</div>' : ''}</div>`;
+  return mapaHTML(i, sw, fechar);
+}
+
+// ---- janela das compras automáticas (uma lista por conta, com Aplicar / Aplicar em todas)
+const copiar = (x) => JSON.parse(JSON.stringify(x));
+const listaDe = (i) => RASC[i] || cfgDe(i).rules;
+const sujo = (i) => !!RASC[i] && JSON.stringify(RASC[i]) !== JSON.stringify(cfgDe(i).rules);
+function editarLista(i, fn) {
+  if (!RASC[i]) RASC[i] = copiar(cfgDe(i).rules);
+  fn(RASC[i]);
+  if (!sujo(i)) RASC[i] = null;
+  ovSync();
+}
+function comprasHTML() {
+  const i = compras.i, c = cfgDe(i);
+  if (RASC[i] && !sujo(i)) RASC[i] = null;
+  const lista = listaDe(i);
+  const abas = Array.from({ length: N }, (_, j) => `<button class="cm-aba ${j === i ? 'on' : ''}" data-cpaba="${j}">${nomeConta(j)}${sujo(j) ? '<i class="cm-pend" title="Alterações não aplicadas"></i>' : ''}<small>${cfgDe(j).rules.filter((r) => r.enabled).length} ativas</small></button>`).join('');
+  const ouro = S[i].snap?.gold ?? S[i].snap?.ouro;
+  const linhas = lista.map((r) => {
+    const ops = opcoes(i, r.kind);
+    const ref = r.refId ?? ops[0]?.id;
+    const tem = estoque(i, r.kind, ref);
+    const op = ops.find((o) => o.id === Number(ref));
+    const bloq = !sujo(i) && S[i].snap?.regras?.porRegra?.[r.id]?.bloqueadaAte > Date.now();
+    const dup = lista.some((x) => x !== r && x.kind === r.kind && Number(x.refId) === Number(ref) && x.enabled && r.enabled);
+    const sel = ops.length ? ops.map((o) => `<option value="${o.id}" ${o.id === Number(ref) ? 'selected' : ''}>${esc(o.nome)} · ${num(o.preco)} ouro</option>`).join('') : `<option>${esc(r.label || 'abra o jogo para listar')}</option>`;
+    return `<div class="cm-r ${r.enabled ? '' : 'off'}">
+      <label class="sw" title="Liga/desliga esta compra"><input type="checkbox" data-cpid="${r.id}" data-cpf="enabled" ${r.enabled ? 'checked' : ''}><span class="tg"></span></label>
+      <select class="cm-k" data-cpid="${r.id}" data-cpf="kind"><option value="ball" ${r.kind === 'ball' ? 'selected' : ''}>Pokébola</option><option value="item" ${r.kind === 'item' ? 'selected' : ''}>Item</option></select>
+      <select class="cm-i" data-cpid="${r.id}" data-cpf="refId">${sel}</select>
+      <label class="cm-n">abaixo de<input type="number" min="1" value="${r.min}" data-cpid="${r.id}" data-cpf="min"></label>
+      <label class="cm-n">comprar<input type="number" min="1" value="${r.qty}" data-cpid="${r.id}" data-cpf="qty"></label>
+      <span class="cm-t" title="Quanto a conta tem agora">${tem != null ? 'tem <b>' + num(tem) + '</b>' : ''}</span>
+      <button class="ib" data-cpdel="${r.id}" title="Remover esta compra">${ICON.x}</button>
+      ${bloq ? '<div class="cm-av bad">A última compra não confirmou; pausada por alguns minutos.</div>' : ''}
+      ${dup ? '<div class="cm-av">Há outra compra ligada para este mesmo item.</div>' : ''}
+      ${op && r.enabled && r.qty ? `<div class="cm-res">Quando ficar abaixo de <b>${num(r.min)}</b>, compra <b>${num(r.qty)}</b> (${num(op.preco * r.qty)} ouro por compra).</div>` : ''}
+    </div>`;
+  }).join('') || '<div class="vazio-top">Nenhuma compra automática nesta conta. Use "Adicionar compra".</div>';
+  const pend = sujo(i);
+  return `<div class="ph2"><span>Compras automáticas</span><button class="ib" data-fechar="1" title="Fechar (Esc)">${ICON.x}</button></div>
+    <div class="cm-abas">${abas}</div>
+    <div class="cm-topo"><label class="sw" title="Chave geral desta conta: sem ela nada age no jogo"><span>Automação desta conta</span><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span></label>${ouro != null ? `<span class="cm-ouro">Ouro agora: <b>${num(ouro)}</b></span>` : ''}</div>
+    ${c.enabled ? '' : '<div class="hint">A chave "Automação" desta conta está desligada: nada é comprado até ligar.</div>'}
+    <div class="cm-lista">${linhas}</div>
+    <button class="cm-add" data-cpadd="1">+ Adicionar compra</button>
+    <div class="cm-rod">
+      <span class="hint" style="margin:0">${pend ? 'Alterações ainda não aplicadas.' : 'Tudo aplicado nesta conta.'}</span>
+      <span class="sp"></span>
+      <button data-cpdesc="1" ${pend ? '' : 'disabled'}>Descartar</button>
+      <button class="pri" data-cpaplicar="um" ${pend ? '' : 'disabled'}>Aplicar</button>
+      <button class="pri" data-cpaplicar="todas" title="Copia esta lista para as ${N} contas (substitui a lista das outras)">Aplicar em todas as contas</button>
+    </div>`;
+}
+function novaCompra(i) {
+  const o = opcoes(i, 'ball')[0];
+  return { id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), kind: 'ball', refId: o ? o.id : null, label: o ? o.nome : '', min: 100, qty: 100, enabled: true };
+}
+function aplicarCompras(i, todas) {
+  const lista = copiar(listaDe(i));
+  const alvos = todas ? Array.from({ length: N }, (_, j) => j) : [i];
+  for (const j of alvos) { const c = cfgDe(j); c.rules = copiar(lista); RASC[j] = null; salvarCfg(j, c); }
+  toast(todas ? `Lista aplicada nas ${N} contas` : `Lista aplicada em ${nomeConta(i).replace(/<[^>]*>/g, '')}`);
+}
+function mudarCompra(i, id, campo, valor) {
+  editarLista(i, (l) => {
+    const r = l.find((x) => x.id === id);
+    if (!r) return;
+    if (campo === 'enabled') r.enabled = !!valor;
+    else if (campo === 'kind') { r.kind = valor === 'item' ? 'item' : 'ball'; const o = opcoes(i, r.kind)[0]; r.refId = o ? o.id : null; r.label = o ? o.nome : ''; }
+    else if (campo === 'refId') { const o = opcoes(i, r.kind).find((x) => x.id === Number(valor)); if (o) { r.refId = o.id; r.label = o.nome; } }
+    else if (campo === 'min' || campo === 'qty') r[campo] = Math.max(1, Math.round(Number(valor) || 1));
+  });
 }
 
 
@@ -749,14 +803,13 @@ function barraHp(p, grande) {
 function consumiveis(i, kind) {
   const s = S[i], snap = s.snap, cat = s.catalog;
   const ga = snap?.gameAuto || {};
-  const rid = kind === 'ball' ? ID_BOLA : ID_POCAO;
-  const r = regra(i, rid);
   let ids = (kind === 'ball' ? ga.ballIds : ga.potionIds) || [];
-  if (!ids.length && r?.refId != null) ids = [r.refId];
+  if (!ids.length) { const r0 = regraDe(i, kind === 'ball' ? 'ball' : 'item'); if (r0?.refId != null) ids = [r0.refId]; }
   return ids.map((id) => {
     const nome = kind === 'ball' ? (cat?.bolas?.find((b) => b.id === Number(id))?.nome || `Bola ${id}`) : (cat?.items?.[id]?.name || `Item ${id}`);
     const q = estoque(i, kind, id) ?? 0;
-    const pouco = q < Math.max(1, r?.enabled && Number(r.refId) === Number(id) ? r.min : kind === 'ball' ? 50 : 20);
+    const r = regraDe(i, kind === 'ball' ? 'ball' : 'item', id);
+    const pouco = q < Math.max(1, r ? r.min : kind === 'ball' ? 50 : 20);
     const b = snap?.bolsa;
     const ic = (kind === 'ball' ? b?.bolas : b?.cura)?.find((x) => Number(x.id) === Number(id))?.ico ?? null;
     return { id, nome, q, pouco, ico: ic };
@@ -808,9 +861,9 @@ function ultraDados(i) {
 }
 function cartaoUltra(d) {
   const i = d.i, c = cfgDe(i), snap = S[i].snap;
-  const sw = (k, nome, on) => `<button class="u-sw ${on ? 'on' : ''}" data-am="${i}|${k}" title="Abrir ${nome.toLowerCase()}"><i data-amt="${i}|${k}" title="${on ? 'Desligar' : 'Ligar'} sem abrir"></i>${nome}</button>`;
+  const sw = (k, nome, on) => `<button class="u-sw ${on ? 'on' : ''}" ${k === 'compras' ? `data-cp="${i}"` : `data-am="${i}|${k}"`} title="Abrir ${nome.toLowerCase()}"><i ${k === 'compras' ? `data-cpt="${i}"` : `data-amt="${i}|${k}"`} title="${on ? 'Desligar' : 'Ligar'} sem abrir"></i>${nome}</button>`;
   const chaves = `<div class="u-sws"><label class="sw u-master" title="Chave geral desta conta"><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span><span>Automação</span></label>`
-    + `<span class="u-swg ${c.enabled ? '' : 'desl'}">${sw('bola', 'Bola', regra(i, ID_BOLA)?.enabled)}${sw('poc', 'Poção', regra(i, ID_POCAO)?.enabled)}${sw('mapa', 'Mapa', c.autoHunt?.enabled)}</span></div>`;
+    + `<span class="u-swg ${c.enabled ? '' : 'desl'}">${sw('compras', 'Compras', c.rules.some((r) => r.enabled))}${sw('mapa', 'Mapa', c.autoHunt?.enabled)}</span></div>`;
   if (d.carregando) return `<div class="u-cab2"><span class="dot"></span><b>${nomeConta(i)}</b><span class="u-st">carregando o jogo…</span></div>${chaves}`;
   const pk = d.pk, ses = d.ses;
   const outros = d.team.filter((p) => p !== pk);
@@ -874,7 +927,8 @@ function detalheHTML(i, aba, filtro) {
 let uModalPend = false;
 function renderUltraModal(el) {
   let box = el.querySelector('.u-modal');
-  const conteudo = painel ? `<div class="panel on u-mpanel" data-ovbox>${painelHTML(painel.i, painel.k)}</div>`
+  const conteudo = compras ? `<div class="panel on u-mpanel cm" data-ovbox>${comprasHTML()}</div>`
+    : painel ? `<div class="panel on u-mpanel" data-ovbox>${painelHTML(painel.i, painel.k)}</div>`
     : uDet && S[uDet.i] && !S[uDet.i].desligada ? `<div class="panel on u-mpanel u-mdet" data-ovbox>${detalheHTML(uDet.i, uDet.aba, uDet.filtro)}</div>` : '';
   if (!conteudo) { if (box) box.remove(); return; }
   if (!box) { box = document.createElement('div'); box.className = 'u-modal'; el.appendChild(box); box.dataset.h = ''; }
@@ -986,6 +1040,7 @@ function renderTudo() {
 // O jogo é uma view nativa: HTML da interface não fica por cima dele. Os menus abrem numa view
 // transparente própria, posta sobre o quadrado. O jogo continua visível e rodando por baixo.
 function ovAberto() {
+  if (compras) return { i: -1, kind: 'modal', html: () => comprasHTML() };
   if (painel) return { i: painel.i, kind: 'panel', html: () => painelHTML(painel.i, painel.k) };
   if (menu != null) return { i: menu, kind: 'menu', html: () => menuHTML(menu) };
   if (twHover != null) return { i: twHover, kind: 'pop', html: () => (popTipo === 'kk' ? kickHTML(twHover) : twitchHTML(twHover)) };
@@ -1006,6 +1061,7 @@ function ovSync() {
   app.overlay(msg);
 }
 function abrir(estado) {
+  if (estado.painel || estado.menu != null || estado.twHover != null) compras = null;
   if (estado.painel) uDet = null;
   painel = estado.painel !== undefined ? estado.painel : painel;
   menu = estado.menu !== undefined ? estado.menu : menu;
@@ -1013,16 +1069,17 @@ function abrir(estado) {
   for (let i = 0; i < N; i++) renderSlot(i);
   ovSync();
 }
-const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
+const fecharTudo = () => { compras = null; abrir({ painel: null, menu: null, twHover: null }); };
+function abrirCompras(i) { painel = null; menu = null; twHover = null; compras = { i: Math.max(0, Math.min(N - 1, i)) }; for (let j = 0; j < N; j++) renderSlot(j); ovSync(); }
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-somm],[data-rot],[data-rotabrir],#ka,[data-udet],[data-ufil],[data-ufechar],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-cp],[data-cpt],[data-cpaba],[data-cpadd],[data-cpdel],[data-cpdesc],[data-cpaplicar],#cpg,[data-somm],[data-rot],[data-rotabrir],#ka,[data-udet],[data-ufil],[data-ufechar],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) {
     if (e.target.closest('[data-ovbox]')) return;           // dentro da janela do Ultra eco
     if (uDet && e.target.closest('.u-modal')) { uDet = null; renderUltra(); return; }
-    if (menu != null || painel) abrir({ menu: null, painel: null });
+    if (menu != null || painel || compras) fecharTudo();
     return;
   }
   acaoClick({ ...t.dataset }, t.id, {});
@@ -1033,6 +1090,8 @@ async function acaoClick(d, id, campos) {
     MODO = await app.modo(d.modo);
     renderTudo(); ovSync();
     toast(MODO_TOAST[MODO]);
+  } else if (id === 'cpg') {
+    if (compras) fecharTudo(); else abrirCompras(foco ?? 0);
   } else if (id === 'ka') {
     KEEPALIVE = await app.keepalive(!KEEPALIVE);
     renderKeepalive();
@@ -1132,16 +1191,25 @@ async function acaoClick(d, id, campos) {
     // a bolinha do botão: liga/desliga direto
     const [si, k] = d.amt.split('|'), i = +si;
     if (k === 'mapa') { const c = cfgDe(i); c.autoHunt.enabled = !c.autoHunt.enabled; salvarCfg(i, c); toast(`Mapa ${c.autoHunt.enabled ? 'ligado' : 'desligado'}`); }
-    else {
-      const id = k === 'bola' ? ID_BOLA : ID_POCAO, on = !regra(i, id)?.enabled;
-      mudarRegra(i, id, k === 'bola' ? 'ball' : 'item', { enabled: on });
-      toast(`${k === 'bola' ? 'Compra de bola' : 'Compra de poção'} ${on ? 'ligada' : 'desligada'}`);
-    }
     if (painel?.i === i) ovSync();
-  } else if (d.am) {
+  } else if (d.cpt) {
+    // a bolinha do botão Compras: liga/desliga todas as compras da conta
+    const i = +d.cpt, c = cfgDe(i), on = !c.rules.some((r) => r.enabled);
+    if (!c.rules.length) { abrirCompras(i); return; }
+    c.rules.forEach((r) => { r.enabled = on; });
+    RASC[i] = null;
+    salvarCfg(i, c);
+    toast(`Compras ${on ? 'ligadas' : 'desligadas'}`);
+  } else if (d.cp) abrirCompras(+d.cp);
+  else if (d.cpaba) { compras = { i: +d.cpaba }; ovSync(); }
+  else if (d.cpadd) editarLista(compras.i, (l) => l.push(novaCompra(compras.i)));
+  else if (d.cpdel) editarLista(compras.i, (l) => { const k = l.findIndex((x) => x.id === d.cpdel); if (k >= 0) l.splice(k, 1); });
+  else if (d.cpdesc) { RASC[compras.i] = null; ovSync(); }
+  else if (d.cpaplicar) aplicarCompras(compras.i, d.cpaplicar === 'todas');
+  else if (d.am) {
     const [i, k] = d.am.split('|');
     abrir({ painel: painel?.i === +i && painel.k === k ? null : { i: +i, k }, menu: null, twHover: null });
-  } else if (d.fechar) abrir({ painel: null });
+  } else if (d.fechar) { compras = null; abrir({ painel: null }); }
   else if (d.gear) abrir({ menu: menu === +d.gear ? null : +d.gear, painel: null, twHover: null });
   else if (d.max) { foco = foco === +d.max ? null : +d.max; painel = null; menu = null; twHover = null; renderTudo(); ovSync(); }
   else if (d.th) { foco = +d.th; painel = null; menu = null; twHover = null; renderTudo(); ovSync(); }
@@ -1193,28 +1261,21 @@ function fecharTwDepois() {
   clearTimeout(saidaTw);
   saidaTw = setTimeout(() => { if (twHover != null && !painel && menu == null) abrir({ twHover: null }); }, 400);
 }
-document.addEventListener('change', (e) => acaoChange({ ...e.target.dataset }, e.target.value, e.target.checked));
+document.addEventListener('change', (e) => { acaoChange({ ...e.target.dataset }, e.target.value, e.target.checked); if (e.target.dataset.cpf && e.target.matches('select,input[type=number]')) e.target.blur(); });
 function acaoChange(d, value, checked) {
-  const par = (v) => { const [i, k] = v.split('|'); return { i: +i, k, id: k === 'bola' ? ID_BOLA : ID_POCAO, kind: k === 'bola' ? 'ball' : 'item' }; };
   if (d.master) { const i = +d.master, c = cfgDe(i); c.enabled = checked; salvarCfg(i, c); toast(c.enabled ? 'Automação desta conta ligada' : 'Automação desta conta desligada'); }
   else if (d.mapa) { const i = +d.mapa, c = cfgDe(i); c.autoHunt.enabled = checked; salvarCfg(i, c); }
+  else if (d.cpf && compras) mudarCompra(compras.i, d.cpid, d.cpf, d.cpf === 'enabled' ? checked : value);
   else if (d.somv) app.som(+d.somv, null, Number(value) / 100);
   else if (d.twauto) app.twitch.auto(+d.twauto, checked);
   else if (d.kkset) { const [i, campo] = d.kkset.split('|'); if (campo === 'leve') app.kick.set(+i, 'completo', !checked); else app.kick.set(+i, campo, checked); }
   else if (d.kktipo) app.kick.set(+d.kktipo, 'tipo', value);
-  else if (d.ron) { const p = par(d.ron); mudarRegra(p.i, p.id, p.kind, { enabled: checked }); }
-  else if (d.rref) { const p = par(d.rref); const o = opcoes(p.i, p.kind).find((x) => x.id === Number(value)); if (o) mudarRegra(p.i, p.id, p.kind, { refId: o.id, label: o.nome }); }
-  else if (d.rmin || d.rqty) {
-    const p = par(d.rmin || d.rqty);
-    const v = Math.max(1, Math.round(Number(value) || 1));
-    mudarRegra(p.i, p.id, p.kind, d.rmin ? { min: v } : { qty: v });
-  }
 }
 document.addEventListener('keydown', (e) => {
   if (e.target.matches('input,select')) { if (e.key === 'Enter') e.target.blur(); return; }
   if (e.key === 'Escape') {
     if (uDet) { uDet = null; renderUltra(); }
-    else if (painel || menu != null || twHover != null) fecharTudo();
+    else if (compras || painel || menu != null || twHover != null) fecharTudo();
     else if (kkVer) { kkVer = null; renderTudo(); }
     else if (foco != null) { foco = null; renderTudo(); }
   }

@@ -1,3 +1,3 @@
-- Som por conta: no menu da engrenagem de cada conta tem mudo/ligado e volume. Começa mutado e o app lembra a escolha
-- Rotom Sniper (extensão oficial) dentro do app: cockpit de cada conta pelo ícone ao lado da Kick
-- Botão Tela (keepalive) e remoção do sniper próprio do Mercado (agora só o Rotom)
+- Compras automáticas numa janela só: lista de compras por conta (várias bolas, poções e itens), com Aplicar e Aplicar em todas as contas
+- Botão 🛒 Compras no topo e chip "Compras" na barra de cada conta (a bolinha liga/desliga todas)
+- Regras antigas de Bola e Poção continuam funcionando e aparecem na lista

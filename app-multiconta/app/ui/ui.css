@@ -481,3 +481,29 @@ img.u-ico.falhou{visibility:hidden}
 .ib.rot.on{color:var(--accent)}
 .ib.rot.off{color:var(--muted)}
 .ib.rot[disabled]{opacity:.45;cursor:default}
+
+/* Compras automáticas (janela única) */
+.cm-abas{display:flex;gap:6px;margin:4px 0 8px;flex-wrap:wrap}
+.cm-aba{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:5px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);font-size:12.5px;color:var(--fg);position:relative}
+.cm-aba small{font-size:10.5px;color:var(--muted)}
+.cm-aba:hover{border-color:var(--accent)}
+.cm-aba.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cm-pend{position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--mid)}
+.cm-topo{display:flex;align-items:center;gap:14px;margin:2px 0 8px}
+.cm-ouro{font-size:12px;color:var(--muted)}
+.cm-lista{display:flex;flex-direction:column;gap:6px}
+.cm-r{display:grid;grid-template-columns:auto 110px minmax(160px,1fr) 100px 100px 70px auto;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.cm-r.off{opacity:.6}
+.cm-r select,.cm-r input[type=number]{width:100%;box-sizing:border-box}
+.cm-n{display:flex;flex-direction:column;gap:1px;font-size:10.5px;color:var(--muted)}
+.cm-t{font-size:12px;color:var(--muted);text-align:right;white-space:nowrap}
+.cm-t b{color:var(--fg)}
+.cm-res,.cm-av{grid-column:2 / -1;font-size:11.5px;color:var(--muted)}
+.cm-av{color:var(--mid)}.cm-av.bad{color:var(--bad,#ef4444)}
+.cm-add{all:unset;cursor:pointer;margin-top:8px;padding:6px 12px;border:1px dashed var(--line);border-radius:8px;font-size:12.5px;color:var(--accent);text-align:center;display:block}
+.cm-add:hover{border-color:var(--accent)}
+.cm-rod{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.cm-rod .sp{flex:1}
+.cm-rod button{padding:6px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;font-size:12.5px}
+.cm-rod button.pri{border-color:var(--accent);color:var(--accent)}
+.cm-rod button:disabled{opacity:.4;cursor:default}
