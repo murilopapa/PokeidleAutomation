@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('app', {
   zoom: (i, passo) => ipcRenderer.send('ui:zoom', i, passo),
   modo: (m) => ipcRenderer.invoke('ui:modo', m),
   onModo: on('app:modo'),
+  som: (i, mudo, vol) => ipcRenderer.invoke('ui:som', i, mudo, vol),
+  onSom: on('slot:som'),
   keepalive: (ligar) => ipcRenderer.invoke('ui:keepalive', ligar),
   onKeepalive: on('app:keepalive'),
   rotom: {

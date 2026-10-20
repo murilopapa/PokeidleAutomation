@@ -29,7 +29,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'pie', privileges: { standard: t
 
 // ------------------------------------------------------------------ armazenamento por conta
 const DIR = () => path.join(app.getPath('userData'), 'contas');
-const PERSISTE = ['cfg', 'medidas', 'log', 'zoom', 'desligada', 'nick'];
+const PERSISTE = ['cfg', 'medidas', 'log', 'zoom', 'desligada', 'nick', 'som'];
 const store = Array.from({ length: SLOTS }, () => ({}));
 const salvarTimer = {};
 function carregarStores() {
@@ -123,7 +123,7 @@ function criarView(i) {
   views[i] = v; visivel[i] = false;
   slotDe.set(v.webContents.id, i);
   const wc = v.webContents;
-  wc.setAudioMuted(true);
+  wc.setAudioMuted(somDe(i).mudo);
   // Links que o jogo abre (ex.: "Vincular Twitch") ficam na MESMA sessão da conta.
   wc.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\/([\w-]+\.)?(pokeidle\.io|twitch\.tv|kick\.com)\//.test(url)) {
@@ -133,7 +133,7 @@ function criarView(i) {
     return { action: 'deny' };
   });
   wc.on('did-start-navigation', (d) => { if (d.isMainFrame && !d.isSameDocument) cssLeve[i] = null; });
-  wc.on('did-finish-load', () => { aplicarZoom(i); ecoNoJogo(i); });
+  wc.on('did-finish-load', () => { aplicarZoom(i); ecoNoJogo(i); aplicarSom(i); });
   atalhosDeZoom(wc, (p) => zoomConta(i, p));
   wc.on('render-process-gone', () => setTimeout(() => !wc.isDestroyed() && wc.reload(), 3000));
   // O jogo pergunta "sair da página?" (beforeunload). Dentro do app isso só travava o
@@ -441,6 +441,46 @@ ipcMain.on('ui:arraste', (_e, on, cursor) => {
 });
 ipcMain.on('ov:evento', (e, ev) => { if (ov && e.sender === ov.webContents) ui('ov:evento', ev); });
 
+
+// ------------------------------------------------------------------ som por conta (padrão: mudo)
+const somDe = (i) => { const s = store[i]?.som || {}; return { mudo: s.mudo !== false, vol: Number.isFinite(s.vol) ? Math.min(1, Math.max(0, s.vol)) : 0.5 }; };
+// Volume: o Chromium só tem mudo/ligado, então o ganho é aplicado dentro da página (<audio>/<video> e Web Audio).
+const JS_VOLUME = (v) => `(() => { try {
+  if (!window.__pieVol) {
+    window.__pieVol = { v: 1 };
+    const d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume');
+    if (d && d.set) {
+      Object.defineProperty(HTMLMediaElement.prototype, 'volume', { configurable: true, get() { return this.__pieV ?? d.get.call(this); }, set(x) { this.__pieV = x; d.set.call(this, Math.min(1, Math.max(0, x * window.__pieVol.v))); } });
+    }
+    const dd = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, 'destination');
+    if (dd && dd.get) {
+      const mapa = new WeakMap();
+      Object.defineProperty(BaseAudioContext.prototype, 'destination', { configurable: true, get() {
+        if (!mapa.has(this)) { const g = this.createGain(); g.gain.value = window.__pieVol.v; g.connect(dd.get.call(this)); (window.__pieGains ||= []).push(g); mapa.set(this, g); }
+        return mapa.get(this);
+      } });
+    }
+  }
+  window.__pieVol.v = ${v};
+  for (const g of (window.__pieGains || [])) g.gain.value = ${v};
+  for (const m of document.querySelectorAll('audio,video')) { const o = m.__pieV ?? m.volume; m.volume = o; }
+} catch (e) {} })()`;
+function aplicarSom(i) {
+  const wc = views[i]?.webContents;
+  if (!wc || wc.isDestroyed()) return;
+  const { mudo, vol } = somDe(i);
+  wc.setAudioMuted(mudo);
+  wc.executeJavaScript(JS_VOLUME(vol)).catch(() => {});
+}
+ipcMain.handle('ui:som', (_e, i, mudo, vol) => {
+  if (!(i >= 0 && i < SLOTS)) return null;
+  const at = somDe(i);
+  store[i].som = { mudo: mudo == null ? at.mudo : !!mudo, vol: vol == null ? at.vol : Math.min(1, Math.max(0, Number(vol) || 0)) };
+  salvar(i); aplicarSom(i);
+  ui('slot:som', i, somDe(i));
+  return somDe(i);
+});
+
 ipcMain.handle('ui:estado', () => ({
   slots: SLOTS,
   origemJogo: new URL(GAME_URL).origin,
@@ -449,7 +489,7 @@ ipcMain.handle('ui:estado', () => ({
   keepalive: keepaliveLigado(),
   rotom: rotom ? { ...rotom.estado(), ligado: rotomLigado() } : null,
   att: atualizador?.estado() ?? null,
-  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, geo: s.geo ?? null, desligada: !!s.desligada, nick: s.nick ?? null })),
+  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, geo: s.geo ?? null, desligada: !!s.desligada, nick: s.nick ?? null, som: somDe(store.indexOf(s)) })),
   twitch: twitch.estado(),
   kick: kick.estado(),
   jogo: jogo?.estado ?? null,

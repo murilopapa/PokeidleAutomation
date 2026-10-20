@@ -395,8 +395,10 @@ function menuHTML(i) {
   const kick = `<div class="st">Kick: <b>${kk.user ? 'logada · ' + esc(kk.user) : 'não logada'}</b></div><button class="kk-b" data-kklogin="${i}">${kk.user ? 'Trocar conta da Kick' : 'Entrar na Kick'}</button>${kk.user ? '' : '<div class="hint" style="margin:4px">Use e-mail e senha (o Google não deixa logar dentro de apps).</div>'}`;
   const z = S[i].zoom;
   const zoom = `<div class="zoom"><span>Zoom do jogo</span><button data-zoom="${i}|-1">−</button><b>${z ? Math.round(z.z * 100) + '%' : '—'}</b><button data-zoom="${i}|1">+</button><button data-zoom="${i}|0" class="${z && !z.manual ? 'on' : ''}">auto</button></div><div class="hint" style="margin:2px 4px 0">Também dá com Ctrl + roda do mouse dentro do jogo.</div>`;
+  const som = S[i].som || { mudo: true, vol: 0.5 };
+  const somHtml = `<div class="zoom som"><span>Som do jogo</span><button data-somm="${i}" class="${som.mudo ? '' : 'on'}" title="${som.mudo ? 'Mutada: clique para ouvir' : 'Clique para mutar'}">${som.mudo ? '🔇 mutado' : '🔊 ligado'}</button></div><div class="zoom som"><span>Volume</span><input type="range" min="0" max="100" step="5" value="${Math.round(som.vol * 100)}" data-somv="${i}" style="flex:1"><b>${Math.round(som.vol * 100)}%</b></div>`;
   const rot = ROTOM?.disponivel ? `<div class="sep"></div><div class="st">Rotom Sniper: <b>${rotomAtivo(i) ? 'ativo · v' + esc(ROTOM.versao) : ROTOM.ligado ? 'não carregou' : 'desligado'}</b></div><button class="tw-b" data-rotabrir="${i}" ${rotomAtivo(i) ? '' : 'disabled'}>Abrir cockpit do Rotom</button>` : '';
-  return `<h4>${nomeConta(i)}</h4>${corpo}<div class="sep"></div>${kick}<div class="sep"></div>${zoom}${rot}<button data-reload="${i}">Recarregar jogo</button>`;
+  return `<h4>${nomeConta(i)}</h4>${corpo}<div class="sep"></div>${kick}<div class="sep"></div>${zoom}<div class="sep"></div>${somHtml}${rot}<button data-reload="${i}">Recarregar jogo</button>`;
 }
 
 // ---- barra de automação
@@ -1014,7 +1016,7 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-rot],[data-rotabrir],#ka,[data-udet],[data-ufil],[data-ufechar],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-somm],[data-rot],[data-rotabrir],#ka,[data-udet],[data-ufil],[data-ufechar],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) {
@@ -1154,7 +1156,8 @@ async function acaoClick(d, id, campos) {
     if (!v) return toast('Cole o Client ID');
     await app.twitch.clientId(v);
     toast('Client ID salvo');
-  } else if (d.zoom) { const [i, p] = d.zoom.split('|'); app.zoom(+i, +p); }
+  } else if (d.somm) { const i = +d.somm; app.som(i, !(S[i].som?.mudo !== false)); }
+  else if (d.zoom) { const [i, p] = d.zoom.split('|'); app.zoom(+i, +p); }
   else if (d.reload) { app.recarregar(+d.reload); abrir({ menu: null }); }
   else if (d.twcanal) {
     const [i, c] = d.twcanal.split('|');
@@ -1195,6 +1198,7 @@ function acaoChange(d, value, checked) {
   const par = (v) => { const [i, k] = v.split('|'); return { i: +i, k, id: k === 'bola' ? ID_BOLA : ID_POCAO, kind: k === 'bola' ? 'ball' : 'item' }; };
   if (d.master) { const i = +d.master, c = cfgDe(i); c.enabled = checked; salvarCfg(i, c); toast(c.enabled ? 'Automação desta conta ligada' : 'Automação desta conta desligada'); }
   else if (d.mapa) { const i = +d.mapa, c = cfgDe(i); c.autoHunt.enabled = checked; salvarCfg(i, c); }
+  else if (d.somv) app.som(+d.somv, null, Number(value) / 100);
   else if (d.twauto) app.twitch.auto(+d.twauto, checked);
   else if (d.kkset) { const [i, campo] = d.kkset.split('|'); if (campo === 'leve') app.kick.set(+i, 'completo', !checked); else app.kick.set(+i, campo, checked); }
   else if (d.kktipo) app.kick.set(+d.kktipo, 'tipo', value);
@@ -1280,6 +1284,7 @@ app.onKeepalive((on) => { KEEPALIVE = !!on; renderKeepalive(); });
 app.rotom.onEstado((e) => { ROTOM = e; renderRotom(); for (let i = 0; i < N; i++) renderSlot(i); });
 app.onJogo((e) => { JOGO = e; carregarMotor(); for (let i = 0; i < N; i++) renderSlot(i); });
 app.att.onEstado((e) => { const antes = ATT?.fase; ATT = e; renderAtt(); if (e.fase === 'pronto' && antes !== 'pronto') toast(`Versão ${e.nova} pronta: clique em "Atualizar para ${e.nova}" lá em cima`); });
+app.onSom((i, som) => { if (!S[i]) return; S[i].som = som; if (menu === i) renderSlot(i); });
 app.onZoom((i, z) => { if (!S[i]) return; S[i].zoom = z; if (menu === i) renderSlot(i); });
 const fmtMb = (mb) => (mb >= 1024 ? n1(mb / 1024) + ' GB' : Math.round(mb) + ' MB');
 app.onRelayout(() => requestAnimationFrame(enviarLayout));
@@ -1316,7 +1321,7 @@ app.kick.onAudio((m) => { KKSOM = m || {}; renderKickDock(); renderKkVer(); });
   ATT = est.att || null;
   renderAtt();
   // o que já chegou ao vivo (antes desta resposta) vale mais que o guardado
-  for (let i = 0; i < N; i++) S[i] = Object.assign({ snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, geo: est.stores[i].geo || null, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
+  for (let i = 0; i < N; i++) S[i] = Object.assign({ som: est.stores[i].som, snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, geo: est.stores[i].geo || null, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
   montar();
   renderTudo();
   JOGO = est.jogo || null;

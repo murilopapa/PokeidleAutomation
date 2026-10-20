@@ -187,3 +187,7 @@ npm run sync
   conferido linha a linha). A geometria das ondas cheias é medida na página do jogo (`page/inject.js`).
 - `ui/`: interface. `vendor/`: formatação e regra da troca de mapa.
 - `test/`: jogo e Twitch falsos + teste ponta a ponta (`node test/run.mjs`; modos e atualização: `node test/modos.mjs`).
+
+## Som por conta
+Menu da engrenagem de cada conta → "Som do jogo" (mudo/ligado) e "Volume". Padrão: mutado. O mudo é do
+Chromium; o volume é aplicado dentro da página (`<audio>`/`<video>` e Web Audio). Fica salvo por conta.
