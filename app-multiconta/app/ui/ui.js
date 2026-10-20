@@ -13,6 +13,7 @@ const ICON = {
   min: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',
   tw: '<svg viewBox="0 0 24 24"><path d="M4 3h17v11l-4 4h-4l-3 3v-3H4z"/><path d="M15 8v4M11 8v4"/></svg>',
   kk: '<svg viewBox="0 0 24 24"><path d="M5 3h5v6h2V6h3V3h4v6h-3v3h-2v0h2v3h3v6h-4v-3h-3v-3h-2v6H5z"/></svg>',
+  rot: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
   x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   car: '<svg class="car" viewBox="0 0 12 12"><path d="M2 8l4-4 4 4"/></svg>',
   power: '<svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.6a8 8 0 1 0 11.4 0"/></svg>',
@@ -35,6 +36,9 @@ let KKSOM = {};           // "conta|canal" -> está tocando som agora
 let ZOOMKK = 1;           // zoom do player grande da Kick
 let MODO = null;          // 'normal' | 'eco' | 'ultra' (vale para todas as contas); null = nunca escolhido
 let ATT = null;           // estado da atualização automática (processo principal)
+let KEEPALIVE = false;    // tela sempre acesa (powerSaveBlocker no processo principal)
+let ROTOM = null;         // extensão oficial Rotom Sniper: { disponivel, versao, ligado, nova, carregadas[], patches[], erro }
+const rotomAtivo = (i) => !!(ROTOM && ROTOM.ligado && ROTOM.carregadas?.[i]);
 
 function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 1800); }
 
@@ -273,6 +277,7 @@ function headHTML(i) {
       <button class="ib tw ${tw.login && dentro ? 'on' : 'off'}" data-twbtn="${i}" title="Twitch">${ICON.tw}</button>
     </span>
     <span class="tw-wrap" data-kkwrap="${i}">${kickBotao(i)}</span>
+    ${rotomBotao(i)}
     <button class="ib pw" data-power="${i}" title="Desligar esta conta (fecha o jogo dela e libera a RAM)">${ICON.power}</button>
     <button class="ib" data-gear="${i}" title="Conta">${ICON.gear}</button>
     <button class="ib" data-max="${i}" title="${foco === i ? 'Reduzir' : 'Expandir'}">${foco === i ? ICON.min : ICON.max}</button>`;
@@ -307,6 +312,12 @@ function tempoRestante(ms) {
   if (ms <= 0) return '';
   const h = Math.floor(ms / 3600000), m = Math.round((ms % 3600000) / 60000);
   return h ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`;
+}
+// Rotom Sniper: abre o cockpit (a tela da extensão) desta conta. Só aparece com a extensão importada.
+function rotomBotao(i) {
+  if (!ROTOM?.disponivel) return '';
+  const ativo = rotomAtivo(i);
+  return `<button class="ib rot ${ativo ? 'on' : 'off'}" data-rotabrir="${i}" ${ativo ? '' : 'disabled'} title="${ativo ? 'Abrir o cockpit do Rotom Sniper desta conta' : ROTOM.ligado ? 'Rotom Sniper não carregou nesta conta' : 'Rotom Sniper desligado (ligue na barra de cima)'}">${ICON.rot}</button>`;
 }
 function kickBotao(i) {
   const k = KK.contas[i] || {};
@@ -384,7 +395,8 @@ function menuHTML(i) {
   const kick = `<div class="st">Kick: <b>${kk.user ? 'logada · ' + esc(kk.user) : 'não logada'}</b></div><button class="kk-b" data-kklogin="${i}">${kk.user ? 'Trocar conta da Kick' : 'Entrar na Kick'}</button>${kk.user ? '' : '<div class="hint" style="margin:4px">Use e-mail e senha (o Google não deixa logar dentro de apps).</div>'}`;
   const z = S[i].zoom;
   const zoom = `<div class="zoom"><span>Zoom do jogo</span><button data-zoom="${i}|-1">−</button><b>${z ? Math.round(z.z * 100) + '%' : '—'}</b><button data-zoom="${i}|1">+</button><button data-zoom="${i}|0" class="${z && !z.manual ? 'on' : ''}">auto</button></div><div class="hint" style="margin:2px 4px 0">Também dá com Ctrl + roda do mouse dentro do jogo.</div>`;
-  return `<h4>${nomeConta(i)}</h4>${corpo}<div class="sep"></div>${kick}<div class="sep"></div>${zoom}<button data-reload="${i}">Recarregar jogo</button>`;
+  const rot = ROTOM?.disponivel ? `<div class="sep"></div><div class="st">Rotom Sniper: <b>${rotomAtivo(i) ? 'ativo · v' + esc(ROTOM.versao) : ROTOM.ligado ? 'não carregou' : 'desligado'}</b></div><button class="tw-b" data-rotabrir="${i}" ${rotomAtivo(i) ? '' : 'disabled'}>Abrir cockpit do Rotom</button>` : '';
+  return `<h4>${nomeConta(i)}</h4>${corpo}<div class="sep"></div>${kick}<div class="sep"></div>${zoom}${rot}<button data-reload="${i}">Recarregar jogo</button>`;
 }
 
 // ---- barra de automação
@@ -396,7 +408,6 @@ function barHTML(i) {
     ${chip('bola', 'Bola', bola?.enabled, `${esc(nomeCurto(bola))} &lt; ${num(bola?.min ?? 0)}`)}
     ${chip('poc', 'Poção', poc?.enabled, `${esc(nomeCurto(poc))} &lt; ${num(poc?.min ?? 0)}`)}
     ${chip('mapa', 'Mapa', c.autoHunt?.enabled, 'top 1')}
-    ${chip('sniper', 'Sniper', c.sniper?.enabled, (() => { const n = snResumo(S[i].sniper?.hist, 24).ganhou.length; if (n) return `${n} compra${n > 1 ? 's' : ''}`; if (c.sniper?.modo !== 'comprar') return 'simulando'; const tr = ['orb', 'gold'].filter((m) => c.sniper.moedas?.[m]?.on); return !tr.length || tr.some((m) => !(Number(c.sniper.moedas[m].tetoDia) > 0)) ? '⚠ teto 0' : 'comprando'; })())}
     <span class="sp"></span>
     <label class="sw master-c" title="Chave geral desta conta: sem ela nada age no jogo"><span>Automação</span><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span></label>`;
 }
@@ -406,7 +417,6 @@ function painelHTML(i, k) {
   const sw = (attr, on) => `<label class="sw" style="gap:12px"><span>Ligado</span><input type="checkbox" ${attr} ${on ? 'checked' : ''}><span class="tg"></span></label>`;
   const fechar = `<button class="ib" data-fechar="1" title="Fechar">${ICON.x}</button>`;
   if (k === 'mapa') return mapaHTML(i, sw, fechar);
-  if (k === 'sniper') return sniperHTML(i, sw, fechar);
   const kind = k === 'bola' ? 'ball' : 'item';
   const id = k === 'bola' ? ID_BOLA : ID_POCAO;
   const r = regra(i, id) || { min: 100, qty: 100, enabled: false, refId: null };
@@ -425,119 +435,6 @@ function painelHTML(i, k) {
     ${!cfgDe(i).enabled ? '<div class="hint">A chave "Automação" desta conta está desligada: nada é comprado até ligar.</div>' : ''}</div>`;
 }
 
-
-// ---- Sniper do Mercado (itens)
-const SN_ALVOS = {
-  boss: { nome: 'Boss Token', re: /boss token/i },
-  chave: { nome: 'Fragmento de chave', re: /key fragment|fragmento de chave/i },
-  bike: { nome: 'Fragmento de bike', re: /bicycle fragment|fragmento de bicicleta/i },
-};
-const CAT_MERCADO = { stone: 'Pedras', mega: 'Mega Stones', loot: 'Drops', fragment: 'Fragmentos', tm: 'TMs', card: 'Cartas', boss: 'Boss Tokens', ticket: 'Tickets', clan: 'Clã', ovo: 'Ovo Shiny', box: 'Boxes', bicicleta: 'Bicicletas', casa: 'Casas', skin: 'Skins', beast: 'Beast Ball' };
-const SN_COR = { comprou: 'ok', perdeu: 'bad', erro: 'bad', simulado: 'sim', agendado: 'ag', enviado: 'ag', sorteio: 'ag', pulado: '', info: '' };
-const hora = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-function sniperHTML(i, sw, fechar) {
-  const c = cfgDe(i), sn = c.sniper, st = S[i].sniper;
-  const cat = S[i].catalog?.mercado?.catalogo ?? [];
-  const achados = (k) => cat.filter((it) => SN_ALVOS[k].re.test(it.nome || '')).map((it) => it.nome);
-  const chk = (attr, on, txt) => `<label class="sn-chk"><input type="checkbox" ${attr} ${on ? 'checked' : ''}><span>${txt}</span></label>`;
-  const outra = S.findIndex((s, k) => k !== i && cfgDe(k).sniper?.enabled);
-  const gasto = st?.gasto || { gold: 0, orb: 0 };
-  const moeda = (m, nome) => `<div class="sn-moeda">${chk(`data-snmoeda="${i}|${m}"`, sn.moedas[m].on, nome)}
-      <label class="sn-teto">teto 24 h <input type="number" min="0" value="${sn.moedas[m].tetoDia}" data-snteto="${i}|${m}"></label>
-      <span class="sn-gasto">gasto <b>${num(gasto[m] || 0)}</b></span></div>`;
-  const log = (st?.log ?? []).slice().reverse().slice(0, 14).map((l) => `<div class="sn-l ${SN_COR[l.tipo] || ''}"><span>${hora(l.t)}</span>${esc(l.texto)}</div>`).join('')
-    || `<div class="hint" style="margin:4px">${!sn.enabled ? 'Ligue para começar a procurar.' : st?.varreduras ? `Nenhum anúncio ${sn.desconto}% abaixo da referência ainda. Veja em "Olhados agora" quanto falta em cada item.` : 'Procurando… a 1ª varredura sai em segundos.'}</div>`;
-  const olh = st?.olhados ?? [];
-  const tabela = olh.length ? `<div class="sn-olh"><div class="sn-oh"><span>Olhados agora (o mais barato de cada item)</span><span>preço</span><span>últimas vendas</span><span>vitrine</span><span title="O preço que o sniper aceita: ${sn.desconto}% abaixo da referência">compra até</span><span>abaixo</span></div>${olh.map((o) => `<div class="sn-or ${o.pct >= sn.desconto ? 'bom' : ''}"><span>${esc(o.nome)}${o.moeda === 'orb' ? ' <small>Gemas</small>' : ''}</span><span>${num(o.menor)}</span><span>${o.medVen != null ? num(o.medVen) : '—'}</span><span>${o.medVit != null ? num(o.medVit) : '—'}</span><span>${o.ref ? num(Math.floor(o.ref * (1 - sn.desconto / 100))) : '—'}</span><b>${o.ref ? (o.pct > 0 ? `−${o.pct}%` : `+${-o.pct}%`) : 'sem ref.'}</b></div>`).join('')}</div>` : '';
-  // Avisos do que impede uma compra de verdade (o sniper acha, mas não compra).
-  const travas = [];
-  if (sn.enabled && sn.modo === 'comprar') {
-    if (!c.enabled) travas.push('A chave "Automação" desta conta está desligada.');
-    const ligadas = ['orb', 'gold'].filter((m) => sn.moedas[m]?.on);
-    if (!ligadas.length) travas.push('Nenhuma moeda ligada: marque Gemas ou Coins lá embaixo.');
-    for (const m of ligadas) if (!(Number(sn.moedas[m].tetoDia) > 0)) travas.push(`O teto de 24 h de ${m === 'orb' ? 'Gemas' : 'Coins'} está em 0: ele acha mas não compra. Coloque quanto pode gastar por dia.`);
-    if (!sn.alvos.length) travas.push('Nenhum item marcado para procurar.');
-  }
-  const avisoTravas = travas.length ? `<div class="res bad">${travas.join('<br>')}</div>` : '';
-  const status = st?.ultimaVarredura ? `Última varredura ${hora(st.ultimaVarredura)} · ${st.varreduras} varreduras · ${st.candidatos} item(ns) mudaram na última · ${st.respostas || 0} listas de item lidas${st.agendados ? ` · <b>${st.agendados} compra(s) agendada(s)</b>` : ''}` : '';
-  const abas = `<div class="sn-abas"><button data-sntab="config" class="${snAba === 'config' ? 'on' : ''}">Ajustes e agora</button><button data-sntab="compras" class="${snAba === 'compras' ? 'on' : ''}">Compras${(() => { const n = snResumo(st?.hist, 24).ganhou.length; return n ? ` <b>${n}</b>` : ''; })()}</button></div>`;
-  if (snAba === 'compras') return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>${abas}${comprasHTML(i, st)}`;
-  return `<div class="ph2"><span>Sniper do Mercado (itens)</span><span style="display:flex;gap:6px;align-items:center">${sw(`data-snon="${i}"`, sn.enabled)}${fechar}</span></div>${abas}
-    ${avisoTravas}
-    ${outra >= 0 && !sn.enabled ? `<div class="res">O sniper está ligado em ${nomeConta(outra)}. Ligar aqui desliga lá (só uma conta caça por vez, para não disputar o mesmo anúncio).</div>` : ''}
-    <div class="g4">
-      <label class="field">Modo<select data-snmodo="${i}"><option value="simular" ${sn.modo !== 'comprar' ? 'selected' : ''}>Simular (só anota)</option><option value="comprar" ${sn.modo === 'comprar' ? 'selected' : ''}>Comprar</option></select></label>
-      <label class="field" title="Quanto abaixo do preço de referência o anúncio tem de estar">% abaixo da referência<input type="number" min="1" max="90" value="${sn.desconto}" data-sndesc="${i}"></label>
-      <label class="field" title="Referência = a menor entre a mediana das últimas N vendas do item e a dos N outros anúncios mais baratos da vitrine">Comparar com os últimos<input type="number" min="2" max="10" value="${sn.amostras}" data-snamostras="${i}"></label>
-      <label class="field">Reserva de Coins<input type="number" min="0" value="${sn.reservaGold}" data-snres="${i}"></label>
-    </div>
-    <div class="sn-cats">${Object.entries(SN_ALVOS).map(([k, a]) => { const n = achados(k); return chk(`data-snalvo="${i}|${k}"`, sn.alvos.includes(k), `${a.nome}${cat.length ? ` <small title="${esc(n.join(', '))}">${n.length ? n.length + ' no Mercado' : 'não achei no Mercado'}</small>` : ''}`); }).join('')}</div>
-    <div class="sn-moedas">${moeda('orb', 'Gemas <small>(dinheiro real)</small>')}${moeda('gold', 'Coins')}</div>
-    ${sn.modo === 'comprar' && !c.enabled ? '<div class="res bad">A chave "Automação" desta conta está desligada: não compra nada (só simula) até ligar.</div>' : ''}
-    ${tabela}
-    <div class="sn-log">${log}</div>
-    ${status ? `<div class="hint">${status}</div>` : ''}
-    <div class="hint">Referência de cada item = a MENOR entre a mediana das últimas ${sn.amostras} vendas dele e a dos ${sn.amostras} outros anúncios mais baratos da vitrine agora. Só pega anúncio ${sn.desconto}% abaixo disso. Todo anúncio novo fica retido alguns minutos; quando libera, o jogo sorteia entre quem pediu nos primeiros 3 s, e o sniper pede logo depois de liberar (nunca antes). Varre a vitrine a cada ~30 s.</div>`;
-}
-// ---- histórico do sniper (aba Compras)
-let snAba = 'config';
-let snPeriodo = 24; // horas (0 = tudo)
-const TAXA_VENDA = 0.15; // comissão do Mercado sobre item (shared/taxa-mercado.mjs do jogo), quem paga é quem vende
-function snResumo(hist, horas) {
-  const desde = horas ? Date.now() - horas * 3600000 : 0;
-  const h = (hist ?? []).filter((x) => x.t >= desde);
-  return { todos: h, ganhou: h.filter((x) => x.res === 'ganhou'), perdeu: h.filter((x) => x.res === 'perdeu'), erro: h.filter((x) => x.res === 'erro'), simulado: h.filter((x) => x.res === 'simulado') };
-}
-const moedaN = (m) => (m === 'orb' ? 'Gemas' : 'Coins');
-const quando = (t) => { const d = new Date(t); const hoje = new Date().toDateString() === d.toDateString(); return hoje ? hora(t) : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
-function comprasHTML(i, st) {
-  const r = snResumo(st?.hist, snPeriodo);
-  const per = `<label class="sn-per">Período <select data-snper="${i}">${[[24, 'últimas 24 h'], [168, 'últimos 7 dias'], [0, 'tudo']].map(([v, n]) => `<option value="${v}" ${snPeriodo === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
-  const lista = r.ganhou.length ? r.ganhou : r.simulado;
-  const simul = !r.ganhou.length && r.simulado.length;
-  if (!lista.length) {
-    return per + `<div class="vazio-top">${r.perdeu.length ? `Nenhuma compra ainda; ${r.perdeu.length} sorteio(s) perdido(s) para outro jogador.` : 'Nada comprado (nem simulado) neste período.'}</div>`;
-  }
-  // por moeda e por item: unidades, custo médio, referência de agora, preço mínimo (empate) e lucro se revender
-  const refAgora = {};
-  for (const o of st?.olhados ?? []) if (o.ref) refAgora[`${o.nome}|${o.moeda}`] = o.ref;
-  const porItem = {};
-  for (const x of lista) {
-    const k = `${x.nome}|${x.moeda}`;
-    const g = (porItem[k] ??= { nome: x.nome, moeda: x.moeda, un: 0, custo: 0, refCompra: 0 });
-    g.un += x.qtd; g.custo += x.qtd * x.preco; g.refCompra += x.qtd * (x.ref || x.preco);
-  }
-  const totais = {};
-  const linhasItem = Object.entries(porItem).map(([k, g]) => {
-    const medio = g.custo / g.un;
-    const ref = refAgora[k] ?? g.refCompra / g.un;
-    const minimo = Math.ceil(medio / (1 - TAXA_VENDA));
-    const liquido = Math.floor(ref * (1 - TAXA_VENDA));
-    const lucro = (liquido - medio) * g.un;
-    const t = (totais[g.moeda] ??= { gasto: 0, lucro: 0, un: 0, ref: 0 });
-    t.gasto += g.custo; t.lucro += lucro; t.un += g.un; t.ref += g.refCompra;
-    return `<div class="sn-it"><span>${esc(g.nome)}</span><span>${num(g.un)}</span><span>${num(Math.round(medio))}</span><span title="${refAgora[k] ? 'referência de agora (últimas vendas / vitrine)' : 'referência na hora da compra'}">${num(Math.round(ref))}${refAgora[k] ? '' : '*'}</span><span title="abaixo disso você perde dinheiro (a taxa de 15% sai de quem vende)">${num(minimo)}</span><b class="${lucro >= 0 ? 'ok' : 'bad'}">${lucro >= 0 ? '+' : ''}${num(Math.round(lucro))}</b><span>${moedaN(g.moeda)}</span></div>`;
-  }).join('');
-  const cards = Object.entries(totais).map(([m, t]) => `<div class="sn-card"><b>${num(t.un)}</b><span>unidades${simul ? ' (simulado)' : ''}</span></div>
-    <div class="sn-card"><b>${num(Math.round(t.gasto))} ${moedaN(m)}</b><span>${simul ? 'teria gastado' : 'gasto'}</span></div>
-    <div class="sn-card"><b>${t.ref ? Math.round((1 - t.gasto / t.ref) * 100) : 0}%</b><span>desconto médio</span></div>
-    <div class="sn-card"><b class="${t.lucro >= 0 ? 'ok' : 'bad'}">${t.lucro >= 0 ? '+' : ''}${num(Math.round(t.lucro))} ${moedaN(m)}</b><span>lucro se revender agora (já sem os 15%)</span></div>`).join('');
-  const ult = lista.slice().reverse().slice(0, 30).map((x) => `<div class="sn-l ${x.res === 'ganhou' ? 'ok' : 'sim'}"><span>${quando(x.t)}</span>${esc(x.nome)} ×${num(x.qtd)} por ${num(x.preco)} ${moedaN(x.moeda)}/un. (−${x.pct}% da ref. ${num(x.ref)})${x.vendedor ? ` · de ${esc(x.vendedor)}` : ''}</div>`).join('');
-  return per + (simul ? '<div class="res">Modo simular: estes são os que ele <b>teria</b> comprado.</div>' : '')
-    + `<div class="sn-cards">${cards}</div>`
-    + `<div class="hint" style="margin:6px 2px 2px">Tentativas no período: <b>${r.ganhou.length}</b> ganhas · <b>${r.perdeu.length}</b> sorteios perdidos${r.erro.length ? ` · <b>${r.erro.length}</b> com erro` : ''}${r.simulado.length && r.ganhou.length ? ` · ${r.simulado.length} simuladas` : ''}</div>`
-    + `<div class="sn-tab"><div class="sn-it sn-ith"><span>Item</span><span>Unid.</span><span>Paguei/un.</span><span>Vender a</span><span>Mínimo</span><span>Lucro</span><span></span></div>${linhasItem}</div>`
-    + `<div class="hint">"Vender a" = referência de agora (a menor entre as últimas vendas e a vitrine)${Object.keys(refAgora).length ? '' : '; * = referência na hora da compra'}. "Mínimo" = abaixo disso a venda dá prejuízo (a comissão de 15% sai de quem vende; item não paga diária).</div>`
-    + `<div class="sn-log">${ult}</div>`;
-}
-
-function mudarSniper(i, patch) {
-  const c = cfgDe(i);
-  c.sniper = { ...c.sniper, ...patch, moedas: { ...c.sniper.moedas, ...(patch.moedas || {}) } };
-  salvarCfg(i, c);
-  // só uma conta caça por vez
-  if (patch.enabled) for (let k = 0; k < N; k++) if (k !== i && cfgDe(k).sniper?.enabled) { const o = cfgDe(k); o.sniper.enabled = false; salvarCfg(k, o); }
-}
 
 function retrato(pokeId) {
   const dex = PieHunt.dexDoRetrato(pokeId);
@@ -782,6 +679,37 @@ const MODO_TOAST = {
   eco: 'Modo Eco: cena desligada em todas as contas (a caça continua)',
   ultra: 'Ultra eco: os jogos seguem rodando, só não são desenhados',
 };
+function renderKeepalive() {
+  const b = $('#ka');
+  if (!b) return;
+  b.classList.toggle('on', KEEPALIVE);
+  b.textContent = KEEPALIVE ? '☀ Tela acesa' : '☾ Tela';
+  b.title = KEEPALIVE
+    ? 'Keepalive ligado: a tela não apaga e o PC não suspende enquanto o app estiver aberto. Clique para desligar.'
+    : 'Keepalive desligado. Clique para impedir a tela de apagar e o PC de suspender enquanto o app estiver aberto.';
+}
+// Rotom Sniper (extensão oficial): ligar/desligar, importar/atualizar, pasta de patches e o cockpit de cada conta.
+function renderRotom() {
+  const el = $('#rotg');
+  if (!el) return;
+  const r = ROTOM;
+  let h = '';
+  if (r) {
+    if (!r.disponivel) {
+      h = `<button data-rot="importar" class="${r.erro ? 'bad' : ''}" title="${esc(r.erro || 'Importa a extensão Rotom Sniper que está instalada no seu navegador (Brave, Chrome, Edge…) e liga nas 4 contas')}">Rotom: importar</button>`
+        + `<button data-rot="escolher" title="Escolher a pasta da extensão na mão">…</button>`;
+    } else {
+      const falhas = (r.patches || []).filter((p) => !p.ok);
+      const erros = (r.erros || []).filter(Boolean);
+      h = `<button data-rot="ligar" class="${r.ligado ? 'on' : ''}" title="Rotom Sniper v${esc(r.versao)} (extensão oficial, origem: ${esc(r.origem || '?')}). ${r.ligado ? 'Ativo nas contas (o cockpit de cada conta abre pelo ícone de alvo no cabeçalho dela). Clique para desligar (os jogos recarregam).' : 'Desligado. Clique para ligar nas contas (os jogos recarregam).'}${erros.length ? '\nErro ao carregar: ' + esc(erros[0]) : ''}">Rotom v${esc(r.versao)} · ${r.ligado ? 'ligado' : 'desligado'}</button>`
+        + (r.nova ? `<button data-rot="importar" class="novo" title="Tem versão mais nova da extensão no seu navegador. Importa, reaplica seus patches e recarrega os jogos.">Atualizar → ${esc(r.nova)}</button>` : '')
+        + `<button data-rot="pasta" class="${falhas.length ? 'bad' : ''}" title="${falhas.length ? esc('Patch(es) que não encaixaram: ' + falhas.map((p) => p.patch + ' (' + p.erro + ')').join('; ') + '\n\n') : ''}Abre a pasta do Rotom: patches (seus ajustes), cópia original e LEIA-ME">${falhas.length ? '⚠ ' : ''}📁</button>`
+        + (r.ligado && erros.length ? `<button class="bad" disabled title="${esc(erros[0])}">erro</button>` : '');
+    }
+  }
+  if (el.dataset.h !== h) { el.innerHTML = h; el.dataset.h = h; }
+  el.style.display = h ? '' : 'none';
+}
 function renderModos() {
   document.querySelectorAll('#modos [data-modo]').forEach((b) => b.classList.toggle('on', b.dataset.modo === MODO));
   renderUltra();
@@ -880,7 +808,7 @@ function cartaoUltra(d) {
   const i = d.i, c = cfgDe(i), snap = S[i].snap;
   const sw = (k, nome, on) => `<button class="u-sw ${on ? 'on' : ''}" data-am="${i}|${k}" title="Abrir ${nome.toLowerCase()}"><i data-amt="${i}|${k}" title="${on ? 'Desligar' : 'Ligar'} sem abrir"></i>${nome}</button>`;
   const chaves = `<div class="u-sws"><label class="sw u-master" title="Chave geral desta conta"><input type="checkbox" data-master="${i}" ${c.enabled ? 'checked' : ''}><span class="tg"></span><span>Automação</span></label>`
-    + `<span class="u-swg ${c.enabled ? '' : 'desl'}">${sw('bola', 'Bola', regra(i, ID_BOLA)?.enabled)}${sw('poc', 'Poção', regra(i, ID_POCAO)?.enabled)}${sw('mapa', 'Mapa', c.autoHunt?.enabled)}${sw('sniper', 'Sniper', c.sniper?.enabled)}</span></div>`;
+    + `<span class="u-swg ${c.enabled ? '' : 'desl'}">${sw('bola', 'Bola', regra(i, ID_BOLA)?.enabled)}${sw('poc', 'Poção', regra(i, ID_POCAO)?.enabled)}${sw('mapa', 'Mapa', c.autoHunt?.enabled)}</span></div>`;
   if (d.carregando) return `<div class="u-cab2"><span class="dot"></span><b>${nomeConta(i)}</b><span class="u-st">carregando o jogo…</span></div>${chaves}`;
   const pk = d.pk, ses = d.ses;
   const outros = d.team.filter((p) => p !== pk);
@@ -1048,6 +976,7 @@ function renderTudo() {
   for (let i = 0; i < N; i++) renderSlot(i);
   renderTopo();
   renderModos();
+  renderRotom();
   requestAnimationFrame(() => { enviarLayout(); desenharDivisores(); });
 }
 
@@ -1085,7 +1014,7 @@ function abrir(estado) {
 const fecharTudo = () => abrir({ painel: null, menu: null, twHover: null });
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-udet],[data-ufil],[data-ufechar],[data-sntab],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '[data-rot],[data-rotabrir],#ka,[data-udet],[data-ufil],[data-ufechar],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) {
@@ -1102,6 +1031,27 @@ async function acaoClick(d, id, campos) {
     MODO = await app.modo(d.modo);
     renderTudo(); ovSync();
     toast(MODO_TOAST[MODO]);
+  } else if (id === 'ka') {
+    KEEPALIVE = await app.keepalive(!KEEPALIVE);
+    renderKeepalive();
+    toast(KEEPALIVE ? 'Keepalive ligado: a tela não apaga nem o PC suspende enquanto o app estiver aberto' : 'Keepalive desligado: o Windows volta a apagar a tela normalmente');
+  } else if (d.rotabrir !== undefined) {
+    const r = await app.rotom.abrir(+d.rotabrir);
+    if (r?.erro) toast('Rotom Sniper: ' + r.erro);
+    abrir({ menu: null });
+  } else if (d.rot) {
+    if (d.rot === 'pasta') app.rotom.pasta();
+    else if (d.rot === 'ligar') {
+      const on = await app.rotom.ligar(!ROTOM?.ligado);
+      toast(on ? 'Rotom Sniper ligado nas contas. Recarregando os jogos…' : 'Rotom Sniper desligado. Recarregando os jogos…');
+    } else {   // importar | escolher
+      toast(ROTOM?.disponivel ? 'Atualizando o Rotom Sniper…' : 'Importando o Rotom Sniper…');
+      const r = await app.rotom.importar(d.rot === 'escolher');
+      if (r?.cancelado) return;
+      if (r?.erro) { toast('Rotom Sniper: ' + r.erro); return; }
+      const falhas = (r.patches || []).filter((p) => !p.ok);
+      toast(`Rotom Sniper v${r.versao} pronto nas contas. Recarregando os jogos…` + (falhas.length ? ` ⚠ ${falhas.length} patch(es) não encaixaram (veja a 📁)` : ''));
+    }
   } else if (id === 'att') {
     if (ATT?.fase === 'pronto') { toast('Instalando a versão nova… o app abre sozinho em seguida'); app.att.instalar(); return; }
     if (ATT && ['baixando', 'verificando', 'instalando'].includes(ATT.fase)) return;
@@ -1173,9 +1123,6 @@ async function acaoClick(d, id, campos) {
     if (uDet) { uDet.filtro = d.ufil; renderUltra(); }
   } else if (d.ufechar) {
     uDet = null; renderUltra();
-  } else if (d.sntab) {
-    snAba = d.sntab === 'compras' ? 'compras' : 'config';
-    ovSync();
   } else if (d.voltar) {
     foco = null; kkVer = null; painel = null; menu = null; twHover = null;
     renderTudo(); ovSync();
@@ -1183,7 +1130,6 @@ async function acaoClick(d, id, campos) {
     // a bolinha do botão: liga/desliga direto
     const [si, k] = d.amt.split('|'), i = +si;
     if (k === 'mapa') { const c = cfgDe(i); c.autoHunt.enabled = !c.autoHunt.enabled; salvarCfg(i, c); toast(`Mapa ${c.autoHunt.enabled ? 'ligado' : 'desligado'}`); }
-    else if (k === 'sniper') { const on = !cfgDe(i).sniper.enabled; mudarSniper(i, { enabled: on }); toast(`Sniper ${on ? 'ligado' : 'desligado'}`); }
     else {
       const id = k === 'bola' ? ID_BOLA : ID_POCAO, on = !regra(i, id)?.enabled;
       mudarRegra(i, id, k === 'bola' ? 'ball' : 'item', { enabled: on });
@@ -1249,22 +1195,6 @@ function acaoChange(d, value, checked) {
   const par = (v) => { const [i, k] = v.split('|'); return { i: +i, k, id: k === 'bola' ? ID_BOLA : ID_POCAO, kind: k === 'bola' ? 'ball' : 'item' }; };
   if (d.master) { const i = +d.master, c = cfgDe(i); c.enabled = checked; salvarCfg(i, c); toast(c.enabled ? 'Automação desta conta ligada' : 'Automação desta conta desligada'); }
   else if (d.mapa) { const i = +d.mapa, c = cfgDe(i); c.autoHunt.enabled = checked; salvarCfg(i, c); }
-  else if (d.snon) mudarSniper(+d.snon, { enabled: checked });
-  else if (d.snmodo) {
-    const i = +d.snmodo;
-    mudarSniper(i, { modo: value === 'comprar' ? 'comprar' : 'simular' });
-    if (value === 'comprar') toast('Sniper vai COMPRAR de verdade (com a chave Automação ligada), dentro dos tetos');
-  }
-  else if (d.sndesc) mudarSniper(+d.sndesc, { desconto: Math.min(90, Math.max(1, Math.round(Number(value) || 30))) });
-  else if (d.snper) { snPeriodo = Number(value) || 0; ovSync(); }
-  else if (d.snamostras) mudarSniper(+d.snamostras, { amostras: Math.min(10, Math.max(2, Math.round(Number(value) || 4))) });
-  else if (d.snres) mudarSniper(+d.snres, { reservaGold: Math.max(0, Math.round(Number(value) || 0)) });
-  else if (d.snalvo) {
-    const [i, k] = d.snalvo.split('|'), atuais = cfgDe(+i).sniper.alvos;
-    mudarSniper(+i, { alvos: checked ? [...new Set([...atuais, k])] : atuais.filter((x) => x !== k) });
-  }
-  else if (d.snmoeda) { const [i, m] = d.snmoeda.split('|'); mudarSniper(+i, { moedas: { [m]: { ...cfgDe(+i).sniper.moedas[m], on: checked } } }); }
-  else if (d.snteto) { const [i, m] = d.snteto.split('|'); mudarSniper(+i, { moedas: { [m]: { ...cfgDe(+i).sniper.moedas[m], tetoDia: Math.max(0, Math.round(Number(value) || 0)) } } }); }
   else if (d.twauto) app.twitch.auto(+d.twauto, checked);
   else if (d.kkset) { const [i, campo] = d.kkset.split('|'); if (campo === 'leve') app.kick.set(+i, 'completo', !checked); else app.kick.set(+i, campo, checked); }
   else if (d.kktipo) app.kick.set(+d.kktipo, 'tipo', value);
@@ -1341,17 +1271,13 @@ app.onDados((i, d) => {
   if ('medidas' in d) s.medidas = d.medidas || {};
   if ('cfg' in d && d.cfg) s.cfg = d.cfg;
   if ('geo' in d) s.geo = d.geo || null;
-  if ('sniper' in d) {
-    const antes = s.sniper?.log?.at(-1)?.t || 0;
-    s.sniper = d.sniper || null;
-    for (const l of s.sniper?.log ?? []) if (l.t > antes && l.tipo === 'comprou') toast(`${nomeConta(i).replace(/<[^>]+>/g, '')}: ${l.texto}`);
-    if (painel?.i === i && painel.k === 'sniper') ovSync();
-  }
   agendarCalculo(i);
   renderSlot(i);
   if (MODO === 'ultra') renderUltra();
 });
 app.onModo((m) => { MODO = m; renderModos(); });
+app.onKeepalive((on) => { KEEPALIVE = !!on; renderKeepalive(); });
+app.rotom.onEstado((e) => { ROTOM = e; renderRotom(); for (let i = 0; i < N; i++) renderSlot(i); });
 app.onJogo((e) => { JOGO = e; carregarMotor(); for (let i = 0; i < N; i++) renderSlot(i); });
 app.att.onEstado((e) => { const antes = ATT?.fase; ATT = e; renderAtt(); if (e.fase === 'pronto' && antes !== 'pronto') toast(`Versão ${e.nova} pronta: clique em "Atualizar para ${e.nova}" lá em cima`); });
 app.onZoom((i, z) => { if (!S[i]) return; S[i].zoom = z; if (menu === i) renderSlot(i); });
@@ -1383,11 +1309,14 @@ app.kick.onAudio((m) => { KKSOM = m || {}; renderKickDock(); renderKkVer(); });
   KK = est.kick || KK;
   ZOOMKK = est.zoomKick || 1;
   MODO = est.modo || null;
+  KEEPALIVE = !!est.keepalive;
+  renderKeepalive();
+  ROTOM = est.rotom || null;
   if (est.origemJogo) ORIGEM_JOGO = est.origemJogo;
   ATT = est.att || null;
   renderAtt();
   // o que já chegou ao vivo (antes desta resposta) vale mais que o guardado
-  for (let i = 0; i < N; i++) S[i] = Object.assign({ snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, geo: est.stores[i].geo || null, sniper: est.stores[i].sniper || null, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
+  for (let i = 0; i < N; i++) S[i] = Object.assign({ snap: est.stores[i].snapshot, catalog: est.stores[i].catalog, medidas: est.stores[i].medidas || {}, geo: est.stores[i].geo || null, cfg: est.stores[i].cfg, top: [] }, S[i] || {}, { desligada: est.stores[i].desligada, nickSalvo: est.stores[i].nick });
   montar();
   renderTudo();
   JOGO = est.jogo || null;

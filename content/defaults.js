@@ -15,34 +15,17 @@ var PIE_DEFAULT_CFG = {
     riscoMax: 'alto', // 'baixo' = só Tranquila (≥20 kills/vida) | 'alto' = Segura (≥5, como o guia)
     ganhoMin: 0,      // 0 = troca sempre que o 1º lugar mudar; X = só se render X% a mais
   },
-  // Sniper do Mercado (itens): compra anúncio X% abaixo da média vendida em 7 dias.
-  sniper: {
-    enabled: false,
-    modo: 'simular',               // 'simular' (só anota) | 'comprar' (precisa da chave geral também)
-    versao: 3,
-    alvos: [],                     // 'boss' (Boss Token), 'chave' (Key Fragment), 'bike' (Bicycle Fragment): nenhum marcado
-    desconto: 30,                  // % abaixo do preço de referência
-    amostras: 4,                   // referência = mediana das últimas N vendas e dos N outros anúncios mais baratos (a menor)
-    reservaGold: 0,                // nunca deixar os Coins abaixo disto
-    moedas: {
-      orb: { on: false, tetoDia: 0 },       // Gemas (dinheiro de verdade): teto de gasto em 24 h (0 = não compra)
-      gold: { on: false, tetoDia: 0 },
-    },
-  },
 };
 
 function pieMergeCfg(saved) {
   const d = JSON.parse(JSON.stringify(PIE_DEFAULT_CFG));
   if (!saved) return d;
+  const { sniper: _antigo, ...resto } = saved; // o sniper do app foi removido (o Mercado é com o Rotom Sniper)
+  saved = resto;
   return {
     ...d,
     ...saved,
     limits: { ...d.limits, ...(saved.limits || {}) },
-    // config de sniper antiga: alvos e moedas voltam para desmarcados (nada compra sem você escolher);
-    // ficam só o ligado/modo/% que você já tinha escolhido.
-    sniper: saved.sniper?.versao === 3
-      ? { ...d.sniper, ...saved.sniper, moedas: { gold: { ...d.sniper.moedas.gold, ...(saved.sniper.moedas?.gold || {}) }, orb: { ...d.sniper.moedas.orb, ...(saved.sniper.moedas?.orb || {}) } } }
-      : { ...d.sniper, ...(saved.sniper ? { enabled: !!saved.sniper.enabled, modo: saved.sniper.modo === 'comprar' ? 'comprar' : 'simular', desconto: saved.sniper.desconto ?? d.sniper.desconto, amostras: saved.sniper.amostras ?? d.sniper.amostras } : {}) },
     autoHunt: { ...d.autoHunt, ...(saved.autoHunt || {}), ...(saved.autoHunt?.riscoMax === 'médio' ? { riscoMax: 'alto' } : {}) },
     // regras antigas (min / buyTo / maxPerBuy) viram (min / qty)
     rules: Array.isArray(saved.rules)

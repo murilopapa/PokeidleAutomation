@@ -62,6 +62,36 @@ O modo fica salvo e é reaplicado quando uma conta abre ou recarrega. Enquanto v
 nenhum, o app não mexe no Modo Economia de ninguém. Dá para mudar à mão numa conta: o app só
 reaplica ao recarregar ou ao trocar de modo.
 
+## Keepalive (tela sempre acesa)
+
+Botão **Tela** na barra de cima. Ligado ("☀ Tela acesa"), o app usa o `powerSaveBlocker`
+(`prevent-display-sleep`) do Electron: a tela não apaga e o PC não suspende por inatividade enquanto
+o app estiver aberto. Não impede o bloqueio manual (Win+L). Fica salvo e volta ligado ao abrir o app.
+Ao fechar o app, o Windows volta ao normal.
+
+## Rotom Sniper (extensão oficial do jogo)
+
+O app carrega a extensão oficial **Rotom Sniper** de verdade (`session.loadExtension`) na sessão de
+CADA conta, com o mesmo ID da loja (`olccbpdj…`). Cada conta tem o próprio sniper, as próprias
+regras, logs e carteira. O Mercado é só com o Rotom: o app não tem mais sniper próprio.
+
+- **Primeira vez:** o app procura a extensão instalada no Brave, Chrome, Edge, Vivaldi ou Opera
+  (precisa estar instalada pela loja num deles) e importa sozinho. Não achou? Botão **Rotom: importar**
+  ou **…** para escolher a pasta da versão (a que tem o `manifest.json`).
+- **Cockpit (a tela da extensão):** ícone de alvo no cabeçalho de cada conta, ao lado da Kick. Também
+  pela engrenagem da conta → *Abrir cockpit do Rotom*. Abre uma janela do
+  app por conta (ligue e configure o auto-snipe lá, como na extensão).
+- **Ligar/desligar:** clique em "Rotom v… · ligado". Os jogos recarregam para pegar ou largar o código.
+- **Atualizar:** o app olha o navegador a cada 3 h. Se a extensão de lá estiver mais nova, aparece
+  **Atualizar → versão**. O clique importa, refaz a pasta ativa com os seus patches e recarrega os jogos.
+- **Mexer na extensão:** a pasta 📁 abre `%APPDATA%\PokeIdle Multi\rotom`. A cópia original fica
+  intocada em `original\<versão>`; os seus ajustes ficam em `patches\*.json` (troca de texto exata num
+  arquivo da extensão, veja o `LEIA-ME.txt` da pasta) e são reaplicados a cada importação. Patch que
+  não encaixar mais numa versão nova aparece em vermelho (⚠ na 📁) em vez de quebrar em silêncio.
+
+Só a extensão oficial é aceita (o app confere o ID derivado da chave do manifest). O código dela é
+carregado como está: não é copiado para o repositório do app.
+
 ## Atualização automática
 
 O app procura versão nova no GitHub Releases do repositório em `package.json` →
@@ -149,6 +179,7 @@ npm run sync
 - `main.js`: janela, quadrados (WebContentsView com `persist:conta-N`), config por conta.
 - `preload-jogo.js`: gerado por `tools/sync.mjs` (inject.js + content scripts da extensão).
 - `lib/twitch.js`: login Device Code e chat por IRC WebSocket.
+- `lib/rotom.js`: extensão Rotom Sniper (importar do navegador, patches, carregar nas contas, cockpit).
 - `lib/atualizar.js`: atualização automática pelo GitHub Releases.
 - `lib/jogo.js`: baixa da versão do jogo no ar os módulos `shared/` e os catálogos de espécies
   (em `%APPDATA%\PokeIdle Multi\jogo\<versão>`), servidos à interface em `pie://app/jogo/`.

@@ -393,24 +393,6 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .kkg button:disabled{opacity:.45;cursor:default}
 .kkg.vazio{opacity:.6}
 
-/* Sniper do Mercado */
-.sn-cats{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 0}
-.sn-chk{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--fg);cursor:pointer}
-.sn-chk small{color:var(--muted)}
-.sn-moedas{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
-.sn-moeda{border:1px solid var(--line);border-radius:8px;padding:4px 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px}
-.sn-teto{display:flex;align-items:center;gap:5px;color:var(--muted)}
-.sn-teto input{width:96px;padding:3px 6px}
-.sn-gasto{color:var(--muted)}
-.sn-log{margin-top:8px;max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card2)}
-.sn-l{font-size:11.5px;padding:4px 8px;border-top:1px solid var(--line);color:var(--mid)}
-.sn-l:first-child{border-top:0}
-.sn-l span{color:var(--muted);margin-right:6px;font-variant-numeric:tabular-nums}
-.sn-l.ok{color:var(--ok);font-weight:700}
-.sn-l.bad{color:var(--bad)}
-.sn-l.sim{color:var(--accent)}
-.sn-l.ag{color:var(--fg)}
-
 /* bolinha do botão de automação: clicável (liga/desliga sem abrir o menu) */
 .am i[data-amt]{position:relative;cursor:pointer;width:24px;height:13px;border-radius:7px;background:var(--line);box-shadow:none;transition:background .15s}
 .am i[data-amt]::after{content:'';position:absolute;top:2px;left:2px;width:9px;height:9px;border-radius:50%;background:var(--muted);transition:left .15s,background .15s}
@@ -419,30 +401,7 @@ body.modo-ultra .grid,body.modo-ultra #divs,body.modo-ultra .strip,body.modo-ult
 .am i[data-amt]:hover{outline:1px solid var(--accent);outline-offset:1px}
 .am.desl.on i[data-amt]::after{background:var(--mid)}
 
-.sn-olh{margin-top:8px;border:1px solid var(--line);border-radius:8px;max-height:160px;overflow:auto;font-size:11.5px}
-.sn-oh,.sn-or{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr)) 64px;gap:8px;padding:3px 8px;align-items:center}
-.sn-oh{position:sticky;top:0;background:var(--card);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
-.sn-or{border-top:1px solid var(--line);color:var(--mid)}
-.sn-or span,.sn-oh span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sn-or b{text-align:right;color:var(--muted)}
-.sn-or.bom b{color:var(--ok)}
 
-/* Sniper: abas e histórico de compras */
-.sn-abas{display:flex;gap:4px;margin:0 0 8px;border-bottom:1px solid var(--line)}
-.sn-abas button{all:unset;cursor:pointer;padding:5px 12px;font-size:12px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
-.sn-abas button.on{color:var(--fg);border-bottom-color:var(--accent)}
-.sn-abas button b{background:var(--ok);color:#06110c;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
-.sn-per{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:6px}
-.sn-per select{width:auto}
-.sn-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-.sn-card{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:2px;min-width:0}
-.sn-card b{font-size:14px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sn-card span{font-size:10.5px;color:var(--muted)}
-.sn-card b.ok,.sn-it b.ok{color:var(--ok)}.sn-card b.bad,.sn-it b.bad{color:var(--bad)}
-.sn-tab{margin-top:6px;border:1px solid var(--line);border-radius:8px;font-size:11.5px;max-height:130px;overflow:auto}
-.sn-it{display:grid;grid-template-columns:minmax(0,2fr) repeat(5,minmax(0,1fr)) 46px;gap:8px;padding:3px 8px;border-top:1px solid var(--line);color:var(--mid);align-items:center}
-.sn-it span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sn-ith{border-top:0;position:sticky;top:0;background:var(--card);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
 /* Ultra eco: capturas no cartão, "Ver tudo" e os painéis de automação dentro da tela */
 .u-ver{font-size:11px;padding:2px 8px;border-radius:999px;background:transparent;color:var(--mid)}
 .u-caps{display:flex;align-items:center;gap:4px;cursor:pointer;padding:2px 0}
@@ -503,3 +462,22 @@ img.u-ico.falhou{visibility:hidden}
 .u-tico{width:30px}
 .u-tico .u-ico{width:24px;height:24px}
 .u-dsec small{font-weight:500;color:var(--muted);margin-left:4px}
+
+/* keepalive (tela sempre acesa) */
+.ka{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.ka:hover{color:var(--fg)}
+.ka.on{color:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* Rotom Sniper (extensão oficial) */
+.rotg button{white-space:nowrap}
+.rotg button[data-rotabrir]{padding:3px 8px;min-width:24px}
+.rotg button[disabled]{opacity:.4;cursor:default}
+.rotg button.on{color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
+.rotg button.bad{color:var(--bad)}
+.rotg button.novo{background:var(--accent);color:#1a1400;font-weight:700}
+
+/* Rotom Sniper no cabeçalho da conta (ao lado da Kick) */
+.ib.rot svg{width:14px;height:14px}
+.ib.rot.on{color:var(--accent)}
+.ib.rot.off{color:var(--muted)}
+.ib.rot[disabled]{opacity:.45;cursor:default}

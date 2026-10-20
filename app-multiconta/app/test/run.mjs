@@ -281,37 +281,8 @@ check('painel do mapa mostra o top 3 do motor novo', /Top 3/.test(mapaTxt) && /(
 await shot('mapa-motor.png');
 await ui.keyboard.press('Escape'); await sleep(300);
 
-// Sniper do Mercado (itens): simula, depois compra só depois da retenção, só o barato
+// Conta usada nos testes de chavinha do mapa
 const iSn = await ui.$$eval('.slot', (e) => +e.find((x) => /segunda/.test(x.querySelector('.nome')?.textContent || '')).dataset.slot);
-await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sleep(800);
-check('painel do sniper mostra os 3 alvos achados no Mercado', /Boss Token 1 no Mercado/.test(await ovTexto()) && /Fragmento de chave 1 no Mercado/.test(await ovTexto()) && /Fragmento de bike 1 no Mercado/.test(await ovTexto()), (await ovTexto()).replace(/\s+/g, ' ').slice(0, 300));
-const snPadrao = await ui.evaluate((i) => cfgDe(i).sniper, iSn);
-check('sniper: nada ligado por padrão', !snPadrao.enabled && snPadrao.modo === 'simular' && !snPadrao.alvos.length && !snPadrao.moedas.orb.on && !snPadrao.moedas.gold.on && !snPadrao.moedas.orb.tetoDia, JSON.stringify(snPadrao));
-await ui.evaluate((i) => mudarSniper(i, { alvos: ['boss', 'chave', 'bike'], moedas: { orb: { on: true, tetoDia: 100 } } }), iSn); await sleep(300);
-await ovClicar(`[data-snon="${iSn}"]`); await sleep(8000);
-const snLog1 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
-check('simular: anota o fragmento de bike barato em Gemas (vs últimas vendas e vitrine) e ignora o resto', snLog1.some((l) => /^simulado: teria comprado: Bicycle Fragment ×3 por 60 Gemas\/un\. — 37% abaixo \(últimas 4 vendas 98 · vitrine 95\)/.test(l)) && !snLog1.some((l) => /Key|Fire|por 90/.test(l)) && !/MERCADO compra/.test(mockOut), JSON.stringify(snLog1));
-await shot('sniper-simular.png');
-// modo comprar (com a chave Automação da conta ligada)
-if (!(await ui.isChecked(`[data-master="${iSn}"]`))) await ui.click(`.slot[data-slot="${iSn}"] .bar label.sw`);
-// teto em 0 com modo comprar: o painel avisa que não vai comprar
-await ui.evaluate((i) => { mudarSniper(i, { moedas: { orb: { on: true, tetoDia: 0 } } }); mudarSniper(i, { modo: 'comprar' }); }, iSn); await sleep(500);
-check('teto 0 no modo comprar: painel avisa que não compra', /teto de 24 h de Gemas está em 0/.test(await ovTexto()), (await ovTexto()).replace(/\s+/g, ' ').slice(0, 300));
-check('olhados mostram até quanto ele compra', /compra até/.test(await ovTexto()));
-await ui.evaluate((i) => { mudarSniper(i, { moedas: { orb: { on: true, tetoDia: 100 } } }); }, iSn);
-await sleep(28000);
-const comprasSn = mockOut.split('\n').filter((l) => l.startsWith('MERCADO compra'));
-const snLog2 = await ui.evaluate((i) => (S[i].sniper?.log ?? []).map((l) => l.tipo + ': ' + l.texto), iSn);
-check('comprar: pediu só o anúncio barato e só depois de liberar', comprasSn.length === 1 && / 501 /.test(comprasSn[0]) && parseFloat(comprasSn[0].split('faltavam ')[1]) <= 0, comprasSn.join(" / "));
-check('comprar: entrou no sorteio e registrou a compra', snLog2.some((l) => /^sorteio:/.test(l)) && snLog2.some((l) => /^comprou: COMPROU: 1× Bicycle Fragment por 60 Gemas/.test(l)), JSON.stringify(snLog2.slice(-5)));
-// aba Compras: resumo do período, por item (pago, vender a, mínimo, lucro já sem os 15%)
-await ovClicar('[data-sntab="compras"]'); await sleep(700);
-const compTxt = (await ovTexto()).replace(/\s+/g, ' ');
-check('aba Compras: 1 compra, 60 Gemas, mínimo 71, lucro +20 se revender a 95', /1unidades/.test(compTxt) && /60 Gemasgasto/.test(compTxt) && /Bicycle Fragment1609571\+20Gemas/.test(compTxt) && /1 ganhas/.test(compTxt), compTxt.slice(0, 600));
-await shot('sniper-compras.png');
-const persistido = JSON.parse(fs.readFileSync(path.join(userData, "contas", `conta-${iSn + 1}.json`), "utf8"));
-check('histórico do sniper fica salvo no disco', (persistido.sniper?.hist ?? []).some((x) => x.res === 'ganhou' && x.qtd === 1 && x.preco === 60), JSON.stringify(persistido.sniper?.hist?.slice(-2)));
-await ovClicar('[data-sntab="config"]'); await sleep(300);
 // a chavinha do botão liga/desliga sem abrir o menu
 await ui.keyboard.press('Escape'); await sleep(300);
 const mapa0 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
@@ -320,14 +291,6 @@ const mapa1 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
 await ui.click(`.slot[data-slot="${iSn}"] [data-amt="${iSn}|mapa"]`); await sleep(400);
 const mapa2 = await ui.evaluate((i) => cfgDe(i).autoHunt.enabled, iSn);
 check('chavinha no botão liga e desliga sem abrir o menu', mapa1 === !mapa0 && mapa2 === mapa0 && !(await ovTexto()).trim(), JSON.stringify([mapa0, mapa1, mapa2]));
-await ui.click(`.slot[data-slot="${iSn}"] [data-am="${iSn}|sniper"]`); await sleep(800);
-check('teto de Gemas respeitado (100/dia: levou 1 de 3) e gasto contado', (await ui.evaluate((i) => S[i].sniper?.gasto?.orb, iSn)) === 60);
-// só uma conta caça por vez
-const outraSn = (iSn + 1) % 4;
-await ui.evaluate((k) => mudarSniper(k, { enabled: true }), outraSn); await sleep(300);
-check('ligar o sniper em outra conta desliga na primeira', await ui.evaluate(([a, b]) => !cfgDe(a).sniper.enabled && cfgDe(b).sniper.enabled, [iSn, outraSn]));
-await ui.evaluate((k) => mudarSniper(k, { enabled: false }), outraSn);
-await shot('sniper-comprou.png');
 await ui.keyboard.press('Escape'); await sleep(300);
 
 // Golden Potion: item próprio do jogo (welcome), preço do servidor e cura em %

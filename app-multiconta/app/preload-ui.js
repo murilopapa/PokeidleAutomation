@@ -18,6 +18,16 @@ contextBridge.exposeInMainWorld('app', {
   zoom: (i, passo) => ipcRenderer.send('ui:zoom', i, passo),
   modo: (m) => ipcRenderer.invoke('ui:modo', m),
   onModo: on('app:modo'),
+  keepalive: (ligar) => ipcRenderer.invoke('ui:keepalive', ligar),
+  onKeepalive: on('app:keepalive'),
+  rotom: {
+    abrir: (i) => ipcRenderer.invoke('rot:abrir', i),
+    importar: (escolher) => ipcRenderer.invoke('rot:importar', !!escolher),
+    ligar: (on) => ipcRenderer.invoke('rot:ligar', !!on),
+    pasta: () => ipcRenderer.invoke('rot:pasta'),
+    verificar: () => ipcRenderer.invoke('rot:verificar'),
+    onEstado: on('rot:estado'),
+  },
   att: {
     verificar: () => ipcRenderer.invoke('att:verificar'),
     instalar: () => ipcRenderer.invoke('att:instalar'),

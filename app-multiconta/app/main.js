@@ -1,7 +1,7 @@
 // PokeIdle Multi — processo principal.
 // Uma janela com a interface (ui/index.html) e até 4 WebContentsView com o jogo, cada uma com a
 // própria sessão ("persist:conta-N"): cookies, login e config separados por conta.
-const { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, shell, session, protocol, net } = require('electron');
+const { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, shell, session, protocol, net, powerSaveBlocker, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -10,6 +10,8 @@ const Kick = require('./lib/kick');
 const { Jogo } = require('./lib/jogo');
 let jogo = null; // dados e fórmulas do jogo no ar (motor do Onde caçar)
 const Atualizador = require('./lib/atualizar');
+const Rotom = require('./lib/rotom');
+let rotom = null; // extensão oficial Rotom Sniper carregada em cada conta
 
 const SLOTS = 4;                                        // o jogo permite 4 contas por IP
 const GAME_URL = process.env.PIE_GAME_URL || 'https://pokeidle.io/app';
@@ -27,7 +29,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'pie', privileges: { standard: t
 
 // ------------------------------------------------------------------ armazenamento por conta
 const DIR = () => path.join(app.getPath('userData'), 'contas');
-const PERSISTE = ['cfg', 'medidas', 'log', 'zoom', 'desligada', 'nick', 'sniper']; // sniper: histórico de compras aparece mesmo com o jogo fechado
+const PERSISTE = ['cfg', 'medidas', 'log', 'zoom', 'desligada', 'nick'];
 const store = Array.from({ length: SLOTS }, () => ({}));
 const salvarTimer = {};
 function carregarStores() {
@@ -97,7 +99,7 @@ function criarJanela() {
   ov.setVisible(false);
   win.contentView.addChildView(ov);
   ov.webContents.loadURL('pie://app/ui/overlay.html');
-  win.on('closed', () => { win = null; });
+  win.on('closed', () => { win = null; rotom?.fecharJanelas(); });
 }
 
 // Um quadrado do jogo. Criado ao abrir (ou ao ligar a conta) e destruído ao desligar, para a
@@ -298,6 +300,60 @@ function definirModo(m) {
   return m;
 }
 ipcMain.handle('ui:modo', (_e, m) => definirModo(m));
+
+// ------------------------------------------------------------------ keepalive
+// Mantém a tela (e o PC) acordados enquanto o app estiver aberto: o Windows não apaga a tela nem
+// suspende por inatividade. Não impede o bloqueio manual (Win+L). Fica salvo e volta ao abrir o app.
+let keepaliveId = null;
+const keepaliveLigado = () => keepaliveId != null && powerSaveBlocker.isStarted(keepaliveId);
+function definirKeepalive(on) {
+  on = !!on;
+  if (on && !keepaliveLigado()) keepaliveId = powerSaveBlocker.start('prevent-display-sleep');
+  else if (!on && keepaliveId != null) { try { powerSaveBlocker.stop(keepaliveId); } catch (_) { /* já parou */ } keepaliveId = null; }
+  appCfg.keepalive = keepaliveLigado();
+  salvarAppCfg();
+  ui('app:keepalive', appCfg.keepalive);
+  return appCfg.keepalive;
+}
+ipcMain.handle('ui:keepalive', (_e, on) => definirKeepalive(on));
+
+// ------------------------------------------------------------------ Rotom Sniper (extensão oficial)
+// Carregada em TODAS as sessões de conta (snipe do Mercado nas 4 contas). Cada conta tem o próprio cockpit,
+// com regras, logs e carteira separados. Ligada por padrão assim que a extensão for importada.
+const rotomLigado = () => appCfg.rotom !== false;
+const recarregarJogos = () => { for (let i = 0; i < SLOTS; i++) views[i]?.webContents.reloadIgnoringCache(); };
+ipcMain.handle('rot:estado', () => ({ ...rotom.estado(), ligado: rotomLigado() }));
+ipcMain.handle('rot:abrir', (_e, i) => rotom.abrirCockpit(i));
+ipcMain.handle('rot:pasta', () => { rotom.abrirPasta(); return true; });
+ipcMain.handle('rot:verificar', () => rotom.verificar());
+// Importa/atualiza a extensão (do navegador onde ela está instalada, ou de uma pasta escolhida).
+ipcMain.handle('rot:importar', async (_e, escolher) => {
+  try {
+    let origem;
+    if (escolher) {
+      const r = await dialog.showOpenDialog(win ?? undefined, { title: 'Escolha a pasta da extensão Rotom Sniper (a da versão, com o manifest.json)', properties: ['openDirectory'] });
+      if (r.canceled || !r.filePaths[0]) return { cancelado: true };
+      origem = r.filePaths[0];
+    }
+    const res = rotom.importar(origem);
+    appCfg.rotom = true; salvarAppCfg();
+    await rotom.recarregar();
+    recarregarJogos();
+    return { ok: true, versao: res.versao, patches: res.patches };
+  } catch (e) {
+    rotom.ultimoErro = String(e.message || e);
+    ui('rot:estado', { ...rotom.estado(), ligado: rotomLigado() });
+    return { erro: rotom.ultimoErro };
+  }
+});
+// Liga/desliga a extensão em todas as contas (os jogos recarregam, para pegar ou largar o código dela).
+ipcMain.handle('rot:ligar', async (_e, on) => {
+  appCfg.rotom = !!on; salvarAppCfg();
+  if (on) { if (rotom.disponivel()) await rotom.carregar(); } else await rotom.descarregar();
+  recarregarJogos();
+  ui('rot:estado', { ...rotom.estado(), ligado: rotomLigado() });
+  return rotomLigado();
+});
 function zoomKickGrande(passo) {
   const atual = Number(appCfg.zoomKick) || 1;
   appCfg.zoomKick = passo === 0 ? 1 : Math.round(Math.max(0.5, Math.min(2.5, atual + passo * 0.1)) * 10) / 10;
@@ -390,8 +446,10 @@ ipcMain.handle('ui:estado', () => ({
   origemJogo: new URL(GAME_URL).origin,
   zoomKick: Number(appCfg.zoomKick) || 1,
   modo: appCfg.modo ? modo() : null,
+  keepalive: keepaliveLigado(),
+  rotom: rotom ? { ...rotom.estado(), ligado: rotomLigado() } : null,
   att: atualizador?.estado() ?? null,
-  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, geo: s.geo ?? null, sniper: s.sniper ?? null, desligada: !!s.desligada, nick: s.nick ?? null })),
+  stores: store.map((s) => ({ cfg: s.cfg ?? null, snapshot: s.snapshot ?? null, catalog: s.catalog ?? null, medidas: s.medidas ?? {}, geo: s.geo ?? null, desligada: !!s.desligada, nick: s.nick ?? null })),
   twitch: twitch.estado(),
   kick: kick.estado(),
   jogo: jogo?.estado ?? null,
@@ -424,7 +482,7 @@ ipcMain.on('jogo:store-set', (e, itens) => {
   if (itens.snapshot?.nick && itens.snapshot.nick !== store[i].nick) { store[i].nick = itens.snapshot.nick; salvar(i); }
   if (PERSISTE.some((k) => k in itens)) salvar(i);
   const paraUi = {};
-  for (const k of ['snapshot', 'catalog', 'medidas', 'cfg', 'geo', 'sniper']) if (k in itens) paraUi[k] = itens[k];
+  for (const k of ['snapshot', 'catalog', 'medidas', 'cfg', 'geo']) if (k in itens) paraUi[k] = itens[k];
   if (Object.keys(paraUi).length) ui('slot:dados', i, paraUi);
   if (itens.snapshot) { twitch.snapshot(i, itens.snapshot); kick.snapshot(i, itens.snapshot); }
 });
@@ -487,9 +545,10 @@ async function gravarSessoes() {
 ipcMain.handle('att:instalar', async () => { salvarTudoJa(); await gravarSessoes(); return atualizador.instalar(); });
 
 // ------------------------------------------------------------------ início
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   carregarStores();
   try { appCfg = JSON.parse(fs.readFileSync(APP_CFG(), 'utf8')); } catch (_) { appCfg = {}; }
+  if (appCfg.keepalive) definirKeepalive(true);
   // a interface é servida por pie://app/... (mesma origem para os fetch dos dados do guia)
   protocol.handle('pie', (req) => {
     const u = new URL(req.url);
@@ -529,6 +588,24 @@ app.whenReady().then(() => {
   let repo = process.env.PIE_UPDATE_REPO || '';
   try { repo = repo || require('./package.json').atualizacao?.repo || ''; } catch (_) { /* sem repo */ }
   atualizador = new Atualizador({ repo, aoMudar: (e) => ui('att:estado', e) });
+  // Rotom Sniper: precisa estar carregado nas sessões ANTES de os jogos abrirem (o script entra em document_start).
+  rotom = new Rotom({
+    dir: path.join(app.getPath('userData'), 'rotom'),
+    slots: SLOTS,
+    particao: (i) => `persist:conta-${i + 1}`,
+    nome: (i) => store[i].nick || `Conta ${i + 1}`,
+    electron: { session, BrowserWindow, shell },
+    aoMudar: (e) => ui('rot:estado', { ...e, ligado: rotomLigado() }),
+  });
+  try {
+    if (!rotom.disponivel()) { try { rotom.importar(); } catch (e) { rotom.ultimoErro = e.message; } }   // 1ª vez: pega a do navegador, se achar
+    if (rotomLigado() && rotom.disponivel()) await rotom.carregar();
+    rotom.verificar();
+  } catch (e) { console.error('[PIE] Rotom:', e); }
+  setInterval(() => { try { rotom.verificar(); } catch (_) { /* segue */ } }, 3 * 3600 * 1000);
+  // também confere quando você volta para a janela do app (é só olhar a pasta do navegador; no máximo 1×/min)
+  let rotomVerifEm = 0;
+  app.on('browser-window-focus', () => { if (Date.now() - rotomVerifEm > 60000) { rotomVerifEm = Date.now(); try { rotom.verificar(); } catch (_) { /* segue */ } } });
   criarJanela();
   // procura sozinho 20 s depois de abrir e a cada 3 h (só no app instalado, não no `npm start`)
   if (app.isPackaged) { setTimeout(() => atualizador.verificar(), 20000); setInterval(() => atualizador.verificar(), 3 * 3600 * 1000); }

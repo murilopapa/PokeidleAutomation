@@ -1,7 +1,7 @@
 {
   "name": "pokeidle-multi",
   "productName": "PokeIdle Multi",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "description": "Até 4 contas do pokeidle.io lado a lado, cada uma com sessão e automação próprias.",
   "main": "main.js",
   "private": true,

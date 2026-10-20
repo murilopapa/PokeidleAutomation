@@ -1,4 +1,4 @@
+- Rotom Sniper (extensão oficial) dentro do app: carregada nas 4 contas, cockpit de cada conta pelo ícone ao lado da Kick, importa e atualiza do seu navegador e aceita patches seus
+- Botão Tela (keepalive): impede a tela de apagar e o PC de suspender enquanto o app estiver aberto
+- Removido o sniper próprio do Mercado: a compra de itens agora é só pelo Rotom Sniper
 - Corrige o erro "efetividadeHunt is not a function" no Onde caçar (o jogo mudou na versão 1.291)
-- Sniper: avisa em vermelho quando algo impede a compra (teto de 24 h em 0, moeda desligada, Automação desligada)
-- Sniper: coluna "compra até" nos olhados e o motivo de cada oferta pulada
-- Sniper: confere a bolsa e as Gemas para confirmar se a compra entrou, mesmo quando o jogo não responde
