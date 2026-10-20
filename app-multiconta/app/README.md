@@ -192,3 +192,9 @@ npm run sync
 ## Som por conta
 Menu da engrenagem de cada conta → "Som do jogo" (mudo/ligado) e "Volume". Padrão: mutado. O mudo é do
 Chromium; o volume é aplicado dentro da página (`<audio>`/`<video>` e Web Audio). Fica salvo por conta.
+
+## Twitch e Kick (janela única)
+Botão **📺 Lives** no topo (ou o ícone da Twitch/Kick no cabeçalho de uma conta, ou "Twitch e Kick…" no menu da engrenagem).
+Uma aba por conta, com dois cartões: **Twitch** (vincular/desvincular, "entrar sozinho nas lives", lives oficiais e canais fixos)
+e **Kick** (entrar/trocar conta, farmar pontos, player leve, canais com saldo e bônus ativos). Em "Em todas as contas" ficam
+os interruptores que valem para todas de uma vez. Os interruptores aplicam na hora (não há rascunho como nas compras).

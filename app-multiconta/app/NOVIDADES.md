@@ -1,3 +1,3 @@
-- Compras automáticas numa janela só: lista de compras por conta (várias bolas, poções e itens), com Aplicar e Aplicar em todas as contas
-- Botão 🛒 Compras no topo e chip "Compras" na barra de cada conta (a bolinha liga/desliga todas)
-- Regras antigas de Bola e Poção continuam funcionando e aparecem na lista
+- Twitch e Kick numa janela só (botão 📺 Lives): uma aba por conta, login, vínculo, lives e saldos, e os interruptores de todas as contas
+- Compras automáticas: "Adicionar compra" agora cria a compra desligada, para não gastar sem querer
+- A barra de cima ficou mais enxuta (saiu o grupo da Kick) e os popovers de hover da Twitch/Kick foram embora

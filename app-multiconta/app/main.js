@@ -133,6 +133,7 @@ function criarView(i) {
     return { action: 'deny' };
   });
   wc.on('did-start-navigation', (d) => { if (d.isMainFrame && !d.isSameDocument) cssLeve[i] = null; });
+  wc.on('dom-ready', () => aplicarSom(i));
   wc.on('did-finish-load', () => { aplicarZoom(i); ecoNoJogo(i); aplicarSom(i); });
   atalhosDeZoom(wc, (p) => zoomConta(i, p));
   wc.on('render-process-gone', () => setTimeout(() => !wc.isDestroyed() && wc.reload(), 3000));

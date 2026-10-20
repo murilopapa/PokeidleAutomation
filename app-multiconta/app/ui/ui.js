@@ -26,11 +26,11 @@ const S = [];             // por conta: { snap, catalog, medidas, cfg, res, top,
 let TW = { temClientId: false, contas: [] };
 let foco = null;          // conta expandida
 let painel = null;        // { i, k: 'mapa' }
+let lives = null;         // { i }: janela única da Twitch e da Kick (conta da aba aberta)
 let compras = null;       // { i }: janela das compras automáticas (conta da aba aberta)
 const RASC = [];          // rascunho da lista de compras por conta (null = sem alteração pendente)
 let menu = null;          // conta com a engrenagem aberta
 let twHover = null;       // conta com o overlay da Twitch (ou da Kick) aberto
-let popTipo = 'tw';       // 'tw' = Twitch, 'kk' = Kick
 let KK = { contas: [] };  // estado da Kick (processo principal)
 let kkVer = null;         // live da Kick aberta grande: { i, slug }
 let KKSOM = {};           // "conta|canal" -> está tocando som agora
@@ -284,7 +284,7 @@ function headHTML(i) {
 function twitchHTML(i) {
   const tw = TW.contas[i] || {}, jogo = S[i].snap?.twitch;
   const sw = `<div class="auto ${tw.login ? '' : 'off-box'}"><label class="sw" style="flex:1;font-weight:500"><span>Entrar sozinho nas lives</span><input type="checkbox" ${tw.auto ? 'checked' : ''} data-twauto="${i}"><span class="tg"></span></label></div>`;
-  if (!tw.login) return `<h4>Lives oficiais</h4><div class="live"><span class="st">Twitch não vinculada. Use a engrenagem.</span></div>${sw}`;
+  if (!tw.login) return `<h4>Lives oficiais</h4><div class="live"><span class="st">Vincule a Twitch acima para o app entrar nas lives sozinho.</span></div>${sw}`;
   let aviso = '';
   if (jogo && !jogo.login) aviso = '<div class="aviso">Esta conta do jogo ainda não tem Twitch vinculada (no jogo: Twitch → Vincular). Sem isso o bônus não conta.</div>';
   else if (jogo?.login && jogo.login.toLowerCase() !== tw.login.toLowerCase()) aviso = `<div class="aviso">No jogo está vinculada <b>${esc(jogo.login)}</b>, aqui é <b>${esc(tw.login)}</b>. O bônus só conta se for a mesma.</div>`;
@@ -325,8 +325,8 @@ function custoTipo(i, tipo) { return S[i].snap?.kick?.recompensas?.find((r) => r
 function kickHTML(i) {
   const k = KK.contas[i] || {}, jg = S[i].snap?.kick;
   const sw = (attr, on, txt) => `<label class="sw" style="font-weight:500"><span>${txt}</span><input type="checkbox" ${attr} ${on ? 'checked' : ''}><span class="tg"></span></label>`;
-  let h = `<h4>Kick · ${k.user ? 'logado como <b style="color:var(--fg)">' + esc(k.user) + '</b>' : 'não logado'}</h4>`;
-  if (!k.user) h += '<div class="live"><span class="st">Kick não logada. Use a engrenagem.</span></div>';
+  let h = '<h4>Canais da Kick</h4>';
+  if (!k.user) h += '<div class="live"><span class="st">Entre na Kick acima para farmar pontos.</span></div>';
   const swHtml = `<div class="kk-sw">${sw(`data-kkset="${i}|ligado"`, k.ligado, 'Farmar pontos (player mudo)')}
     ${sw(`data-kkset="${i}|leve"`, !k.completo, 'Player leve (só vídeo, gasta menos RAM)')}</div>`;
   if (!jg) return h + swHtml + '<div class="live"><span class="st">Esperando o jogo mandar os canais da Kick…</span></div>';
@@ -379,25 +379,45 @@ function renderKickDock() {
 }
 
 function menuHTML(i) {
-  const tw = TW.contas[i] || {};
-  let corpo = '';
-  if (tw.vinculando) {
-    corpo = `<div class="codigo">Confirme na janela da Twitch que abriu.<br>Código: <b>${esc(tw.vinculando.codigo)}</b></div><div class="hint" style="margin:4px">Entre com a Twitch DESTA conta. A janela fecha sozinha quando der certo.</div>`;
-  } else if (tw.login) {
-    corpo = `<div class="st">Twitch: <b>vinculada · ${esc(tw.login)}</b></div><button class="un" data-unlink="${i}">Desvincular Twitch</button>`;
-  } else {
-    corpo = `<div class="st">Twitch: <b>não vinculada</b></div><button class="tw-b" data-link="${i}">Vincular Twitch</button>`;
-  }
-  if (tw.erro) corpo += `<div class="erro">${esc(tw.erro)}</div>`;
-  const kk = KK.contas[i] || {};
-  const kick = `<div class="st">Kick: <b>${kk.user ? 'logada · ' + esc(kk.user) : 'não logada'}</b></div><button class="kk-b" data-kklogin="${i}">${kk.user ? 'Trocar conta da Kick' : 'Entrar na Kick'}</button>${kk.user ? '' : '<div class="hint" style="margin:4px">Use e-mail e senha (o Google não deixa logar dentro de apps).</div>'}`;
+  const tw = TW.contas[i] || {}, kk = KK.contas[i] || {};
+  const corpo = `<div class="st">Twitch: <b>${tw.login ? 'vinculada · ' + esc(tw.login) : 'não vinculada'}</b></div><div class="st">Kick: <b>${kk.user ? 'logada · ' + esc(kk.user) : 'não logada'}</b></div><button class="tw-b" data-lv="${i}">Twitch e Kick…</button>`;
   const z = S[i].zoom;
   const zoom = `<div class="zoom"><span>Zoom do jogo</span><button data-zoom="${i}|-1">−</button><b>${z ? Math.round(z.z * 100) + '%' : '—'}</b><button data-zoom="${i}|1">+</button><button data-zoom="${i}|0" class="${z && !z.manual ? 'on' : ''}">auto</button></div><div class="hint" style="margin:2px 4px 0">Também dá com Ctrl + roda do mouse dentro do jogo.</div>`;
   const som = S[i].som || { mudo: true, vol: 0.5 };
   const somHtml = `<div class="zoom som"><span>Som do jogo</span><button data-somm="${i}" class="${som.mudo ? '' : 'on'}" title="${som.mudo ? 'Mutada: clique para ouvir' : 'Clique para mutar'}">${som.mudo ? '🔇 mutado' : '🔊 ligado'}</button></div><div class="zoom som"><span>Volume</span><input type="range" min="0" max="100" step="5" value="${Math.round(som.vol * 100)}" data-somv="${i}" style="flex:1"><b>${Math.round(som.vol * 100)}%</b></div>`;
   const rot = ROTOM?.disponivel ? `<div class="sep"></div><div class="st">Rotom Sniper: <b>${rotomAtivo(i) ? 'ativo · v' + esc(ROTOM.versao) : ROTOM.ligado ? 'não carregou' : 'desligado'}</b></div><button class="tw-b" data-rotabrir="${i}" ${rotomAtivo(i) ? '' : 'disabled'}>Abrir cockpit do Rotom</button>` : '';
-  return `<h4>${nomeConta(i)}</h4>${corpo}<div class="sep"></div>${kick}<div class="sep"></div>${zoom}<div class="sep"></div>${somHtml}${rot}<button data-reload="${i}">Recarregar jogo</button>`;
+  return `<h4>${nomeConta(i)}</h4>${corpo}<div class="sep"></div>${zoom}<div class="sep"></div>${somHtml}${rot}<button data-reload="${i}">Recarregar jogo</button>`;
 }
+
+// ---- janela única da Twitch e da Kick (uma aba por conta; os interruptores valem na hora)
+const contasTw = () => Array.from({ length: N }, (_, j) => j).filter((j) => TW.contas[j]?.login && !S[j]?.desligada);
+function livesHTML() {
+  const i = lives.i, tw = TW.contas[i] || {}, kk = KK.contas[i] || {}, jg = S[i].snap?.kick;
+  const abas = Array.from({ length: N }, (_, j) => {
+    const t = TW.contas[j] || {}, k = KK.contas[j] || {};
+    return `<button class="cm-aba ${j === i ? 'on' : ''}" data-lvaba="${j}">${nomeConta(j)}<small><span class="lv-d ${t.login && t.dentro?.length ? 'on' : ''}">Twitch</span> · <span class="lv-d ${k.user && k.ligado ? 'on' : ''}">Kick</span></small></button>`;
+  }).join('');
+  const csK = contasKick(), csT = contasTw();
+  const est = (n, tot) => (!tot || !n ? '' : n === tot ? 'on' : 'meio');
+  const gK = KKG.map((g) => { const n = csK.filter((j) => g.de(KK.contas[j])).length; return `<button class="lv-g ${est(n, csK.length)}" data-kkg="${g.campo}" ${csK.length ? '' : 'disabled'} title="${g.tit}${est(n, csK.length) === 'meio' ? ` (ligado em ${n} de ${csK.length}; clique liga em todas)` : ''}">Kick: ${g.nome}</button>`; }).join('');
+  const nT = csT.filter((j) => TW.contas[j].auto).length;
+  const gT = `<button class="lv-g ${est(nT, csT.length)}" data-twg="1" ${csT.length ? '' : 'disabled'} title="Entrar sozinho nas lives oficiais da Twitch, em todas as contas vinculadas">Twitch: entrar sozinho nas lives</button>`;
+  const twVinc = tw.vinculando
+    ? `<div class="codigo">Confirme na janela da Twitch que abriu.<br>Código: <b>${esc(tw.vinculando.codigo)}</b></div><div class="hint" style="margin:4px">Entre com a Twitch DESTA conta. A janela fecha sozinha quando der certo.</div>`
+    : tw.login ? `<div class="st">Vinculada · <b>${esc(tw.login)}</b></div><button class="un" data-unlink="${i}">Desvincular Twitch</button>`
+    : `<div class="st">Não vinculada</div><button class="tw-b" data-link="${i}">Vincular Twitch</button>`;
+  const twErro = tw.erro && !tw.login ? `<div class="erro">${esc(tw.erro)}</div>` : '';
+  const kkVis = kk.user && kk.ligado ? `<button class="lv-b" data-kkvis="${i}" title="Os players ficam escondidos (continuam rodando); mostrá-los pequenos ajuda a conferir">${kk.visivel ? '◉ Players pequenos visíveis na doca' : '○ Mostrar players pequenos na doca'}</button>` : '';
+  const kkLogin = `<div class="st">${kk.user ? 'Logada · <b>' + esc(kk.user) + '</b>' : 'Não logada'}</div><button class="kk-b" data-kklogin="${i}">${kk.user ? 'Trocar conta da Kick' : 'Entrar na Kick'}</button>${kk.user ? '' : '<div class="hint" style="margin:4px">Use e-mail e senha (o Google não deixa logar dentro de apps).</div>'}`;
+  return `<div class="ph2"><span>Twitch e Kick</span><button class="ib" data-fechar="1" title="Fechar (Esc)">${ICON.x}</button></div>
+    <div class="cm-abas">${abas}</div>
+    <div class="lv-glob"><span class="lv-gt">Em todas as contas</span>${gT}${gK}</div>
+    <div class="lv-cols">
+      <div class="lv-card"><h3>Twitch · ${nomeConta(i)}</h3>${twVinc}${twErro}${twitchHTML(i)}</div>
+      <div class="lv-card"><h3>Kick · ${nomeConta(i)}</h3>${kkLogin}${twErro ? '' : ''}${kickHTML(i)}${kkVis}</div>
+    </div>`;
+}
+function abrirLives(i) { painel = null; menu = null; twHover = null; compras = null; lives = { i: Math.max(0, Math.min(N - 1, i)) }; for (let j = 0; j < N; j++) renderSlot(j); ovSync(); }
 
 // ---- barra de automação
 function barHTML(i) {
@@ -472,7 +492,7 @@ function comprasHTML() {
 }
 function novaCompra(i) {
   const o = opcoes(i, 'ball')[0];
-  return { id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), kind: 'ball', refId: o ? o.id : null, label: o ? o.nome : '', min: 100, qty: 100, enabled: true };
+  return { id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), kind: 'ball', refId: o ? o.id : null, label: o ? o.nome : '', min: 100, qty: 100, enabled: false };
 }
 function aplicarCompras(i, todas) {
   const lista = copiar(listaDe(i));
@@ -927,7 +947,8 @@ function detalheHTML(i, aba, filtro) {
 let uModalPend = false;
 function renderUltraModal(el) {
   let box = el.querySelector('.u-modal');
-  const conteudo = compras ? `<div class="panel on u-mpanel cm" data-ovbox>${comprasHTML()}</div>`
+  const conteudo = lives ? `<div class="panel on u-mpanel lv" data-ovbox>${livesHTML()}</div>`
+    : compras ? `<div class="panel on u-mpanel cm" data-ovbox>${comprasHTML()}</div>`
     : painel ? `<div class="panel on u-mpanel" data-ovbox>${painelHTML(painel.i, painel.k)}</div>`
     : uDet && S[uDet.i] && !S[uDet.i].desligada ? `<div class="panel on u-mpanel u-mdet" data-ovbox>${detalheHTML(uDet.i, uDet.aba, uDet.filtro)}</div>` : '';
   if (!conteudo) { if (box) box.remove(); return; }
@@ -999,18 +1020,6 @@ const KKG = [
   { campo: 'leve', nome: 'Player leve', de: (k) => !k.completo, tit: 'Player leve (só vídeo, menos RAM) em todas. Desligado = página completa da Kick' },
 ];
 const contasKick = () => Array.from({ length: N }, (_, i) => i).filter((i) => KK.contas[i]?.user && !S[i]?.desligada);
-function renderKickGlobal() {
-  const el = $('#kkg');
-  if (!el) return;
-  const cs = contasKick();
-  el.classList.toggle('vazio', !cs.length);
-  const html = `<span class="kkg-t" title="Kick: vale para todas as contas logadas na Kick (${cs.length})">${ICON.kk}</span>` + KKG.map((g) => {
-    const n = cs.filter((i) => g.de(KK.contas[i])).length;
-    const st = !cs.length || !n ? '' : n === cs.length ? 'on' : 'meio';
-    return `<button data-kkg="${g.campo}" class="${st}" ${cs.length ? '' : 'disabled'} title="${g.tit}${st === 'meio' ? ` (ligado em ${n} de ${cs.length}; clique liga em todas)` : ''}">${g.nome}</button>`;
-  }).join('');
-  if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
-}
 async function kickGlobal(campo) {
   const g = KKG.find((x) => x.campo === campo), cs = contasKick();
   if (!g || !cs.length) return;
@@ -1025,7 +1034,6 @@ async function kickGlobal(campo) {
 
 function renderTudo() {
   renderKkVer();
-  renderKickGlobal();
   $('#grid').classList.toggle('focus', foco != null);
   aplicarGrade();
   renderKickDock();
@@ -1040,10 +1048,10 @@ function renderTudo() {
 // O jogo é uma view nativa: HTML da interface não fica por cima dele. Os menus abrem numa view
 // transparente própria, posta sobre o quadrado. O jogo continua visível e rodando por baixo.
 function ovAberto() {
+  if (lives) return { i: -1, kind: 'modal', html: () => livesHTML() };
   if (compras) return { i: -1, kind: 'modal', html: () => comprasHTML() };
   if (painel) return { i: painel.i, kind: 'panel', html: () => painelHTML(painel.i, painel.k) };
   if (menu != null) return { i: menu, kind: 'menu', html: () => menuHTML(menu) };
-  if (twHover != null) return { i: twHover, kind: 'pop', html: () => (popTipo === 'kk' ? kickHTML(twHover) : twitchHTML(twHover)) };
   return null;
 }
 let ovUltimo = '';
@@ -1061,7 +1069,7 @@ function ovSync() {
   app.overlay(msg);
 }
 function abrir(estado) {
-  if (estado.painel || estado.menu != null || estado.twHover != null) compras = null;
+  if (estado.painel || estado.menu != null || estado.twHover != null) { compras = null; lives = null; }
   if (estado.painel) uDet = null;
   painel = estado.painel !== undefined ? estado.painel : painel;
   menu = estado.menu !== undefined ? estado.menu : menu;
@@ -1069,17 +1077,17 @@ function abrir(estado) {
   for (let i = 0; i < N; i++) renderSlot(i);
   ovSync();
 }
-const fecharTudo = () => { compras = null; abrir({ painel: null, menu: null, twHover: null }); };
-function abrirCompras(i) { painel = null; menu = null; twHover = null; compras = { i: Math.max(0, Math.min(N - 1, i)) }; for (let j = 0; j < N; j++) renderSlot(j); ovSync(); }
+const fecharTudo = () => { compras = null; lives = null; abrir({ painel: null, menu: null, twHover: null }); };
+function abrirCompras(i) { painel = null; menu = null; twHover = null; lives = null; compras = { i: Math.max(0, Math.min(N - 1, i)) }; for (let j = 0; j < N; j++) renderSlot(j); ovSync(); }
 
 // ------------------------------------------------------------------ eventos
-const ALVOS = '[data-cp],[data-cpt],[data-cpaba],[data-cpadd],[data-cpdel],[data-cpdesc],[data-cpaplicar],#cpg,[data-somm],[data-rot],[data-rotabrir],#ka,[data-udet],[data-ufil],[data-ufechar],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
+const ALVOS = '#lvg,[data-lv],[data-lvaba],[data-twg],[data-kkg],[data-kkvis],[data-cp],[data-cpt],[data-cpaba],[data-cpadd],[data-cpdel],[data-cpdesc],[data-cpaplicar],#cpg,[data-somm],[data-rot],[data-rotabrir],#ka,[data-udet],[data-ufil],[data-ufechar],[data-voltar],[data-amt],[data-kkg],[data-kkzoom],[data-kkfechar],[data-kksom],[data-kkver],[data-kkvis],[data-kdmin],[data-kkbtn],[data-kklogin],[data-kkres],[data-lay],[data-power],[data-am],[data-gear],[data-max],[data-th],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-twbtn],[data-zoom],#alertaG,[data-modo],#att';
 document.addEventListener('click', (e) => {
   const t = e.target.closest(ALVOS);
   if (!t) {
     if (e.target.closest('[data-ovbox]')) return;           // dentro da janela do Ultra eco
     if (uDet && e.target.closest('.u-modal')) { uDet = null; renderUltra(); return; }
-    if (menu != null || painel || compras) fecharTudo();
+    if (menu != null || painel || compras || lives) fecharTudo();
     return;
   }
   acaoClick({ ...t.dataset }, t.id, {});
@@ -1090,6 +1098,8 @@ async function acaoClick(d, id, campos) {
     MODO = await app.modo(d.modo);
     renderTudo(); ovSync();
     toast(MODO_TOAST[MODO]);
+  } else if (id === 'lvg') {
+    if (lives) fecharTudo(); else abrirLives(foco ?? 0);
   } else if (id === 'cpg') {
     if (compras) fecharTudo(); else abrirCompras(foco ?? 0);
   } else if (id === 'ka') {
@@ -1148,11 +1158,8 @@ async function acaoClick(d, id, campos) {
     }
     renderKickDock();
   } else if (d.kkbtn != null && d.kkbtn !== undefined && d.kkbtn !== '') {
-    const i = +d.kkbtn;
-    popTipo = 'kk';
-    abrir({ twHover: twHover === i ? null : i, menu: null, painel: null });
+    abrirLives(+d.kkbtn);
   } else if (d.kklogin) {
-    abrir({ menu: null, twHover: null });
     app.kick.login(+d.kklogin);
     toast('Entre na Kick na janela que abriu. Feche a janela quando terminar.');
   } else if (d.kkres) {
@@ -1209,11 +1216,18 @@ async function acaoClick(d, id, campos) {
   else if (d.am) {
     const [i, k] = d.am.split('|');
     abrir({ painel: painel?.i === +i && painel.k === k ? null : { i: +i, k }, menu: null, twHover: null });
-  } else if (d.fechar) { compras = null; abrir({ painel: null }); }
+  } else if (d.fechar) { compras = null; lives = null; abrir({ painel: null }); }
   else if (d.gear) abrir({ menu: menu === +d.gear ? null : +d.gear, painel: null, twHover: null });
   else if (d.max) { foco = foco === +d.max ? null : +d.max; painel = null; menu = null; twHover = null; renderTudo(); ovSync(); }
   else if (d.th) { foco = +d.th; painel = null; menu = null; twHover = null; renderTudo(); ovSync(); }
-  else if (d.twbtn) { popTipo = 'tw'; abrir({ twHover: twHover === +d.twbtn && popTipo === 'tw' ? null : +d.twbtn, menu: null, painel: null }); }
+  else if (d.twbtn) abrirLives(+d.twbtn);
+  else if (d.lv) abrirLives(+d.lv);
+  else if (d.lvaba) { lives = { i: +d.lvaba }; ovSync(); }
+  else if (d.twg) {
+    const cs = contasTw(), ligar = !cs.every((j) => TW.contas[j].auto);
+    for (const j of cs) if (!!TW.contas[j].auto !== ligar) await app.twitch.auto(j, ligar);
+    toast(`Twitch: entrar sozinho ${ligar ? 'ligado' : 'desligado'} em ${cs.length} conta${cs.length > 1 ? 's' : ''}`);
+  }
   else if (d.link) {
     const r = await app.twitch.vincular(+d.link);
     if (r?.erro === 'clientId') toast('Falta o Client ID da Twitch');
@@ -1240,27 +1254,7 @@ document.addEventListener('dblclick', (e) => {
   foco = foco === i ? null : i; painel = null; menu = null; twHover = null;
   renderTudo(); ovSync();
 });
-// overlay da Twitch: abre ao passar o mouse
-let saidaTw = null;
 let armado = null, armadoT = null;   // desligar pede 2 cliques
-document.addEventListener('mouseover', (e) => {
-  const w = e.target.closest('[data-twwrap],.head [data-kkwrap]');
-  if (!w) return;
-  clearTimeout(saidaTw);
-  const tipo = w.dataset.kkwrap != null ? 'kk' : 'tw';
-  const i = +(w.dataset.kkwrap ?? w.dataset.twwrap);
-  if ((twHover !== i || popTipo !== tipo) && painel == null && menu == null) { popTipo = tipo; abrir({ twHover: i }); }
-});
-document.addEventListener('mouseout', (e) => {
-  const w = e.target.closest('[data-twwrap],.head [data-kkwrap]');
-  if (!w || w.contains(e.relatedTarget)) return;
-  clearTimeout(saidaTw);
-  fecharTwDepois();
-});
-function fecharTwDepois() {
-  clearTimeout(saidaTw);
-  saidaTw = setTimeout(() => { if (twHover != null && !painel && menu == null) abrir({ twHover: null }); }, 400);
-}
 document.addEventListener('change', (e) => { acaoChange({ ...e.target.dataset }, e.target.value, e.target.checked); if (e.target.dataset.cpf && e.target.matches('select,input[type=number]')) e.target.blur(); });
 function acaoChange(d, value, checked) {
   if (d.master) { const i = +d.master, c = cfgDe(i); c.enabled = checked; salvarCfg(i, c); toast(c.enabled ? 'Automação desta conta ligada' : 'Automação desta conta desligada'); }
@@ -1275,7 +1269,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.matches('input,select')) { if (e.key === 'Enter') e.target.blur(); return; }
   if (e.key === 'Escape') {
     if (uDet) { uDet = null; renderUltra(); }
-    else if (compras || painel || menu != null || twHover != null) fecharTudo();
+    else if (lives || compras || painel || menu != null || twHover != null) fecharTudo();
     else if (kkVer) { kkVer = null; renderTudo(); }
     else if (foco != null) { foco = null; renderTudo(); }
   }
@@ -1324,8 +1318,6 @@ app.onOverlay((ev) => {
   else if (ev.tipo === 'drag-fim') fimDivisor();
   else if (ev.tipo === 'fora') fecharTudo();
   else if (ev.tipo === 'esc') fecharTudo();
-  else if (ev.tipo === 'enter') clearTimeout(saidaTw);
-  else if (ev.tipo === 'leave' && twHover != null && !painel && menu == null) fecharTwDepois();
 });
 
 // ------------------------------------------------------------------ dados do app
@@ -1339,6 +1331,7 @@ app.onDados((i, d) => {
   agendarCalculo(i);
   renderSlot(i);
   if (MODO === 'ultra') renderUltra();
+  if (lives && lives.i === i) ovSync();
 });
 app.onModo((m) => { MODO = m; renderModos(); });
 app.onKeepalive((on) => { KEEPALIVE = !!on; renderKeepalive(); });
@@ -1355,15 +1348,14 @@ app.onRam((r) => {
   partes.push(`Placa de vídeo: ${fmtMb(r.gpu)}`, `App (interface, Twitch): ${fmtMb(r.app)}`);
   $('#ram').parentElement.title = 'Memória própria de cada parte (sem contar a compartilhada duas vezes)\n' + partes.join('\n');
 });
-app.twitch.onEstado((e) => { TW = e; for (let i = 0; i < N; i++) renderSlot(i); });
+app.twitch.onEstado((e) => { TW = e; for (let i = 0; i < N; i++) renderSlot(i); if (lives) ovSync(); });
 app.kick.onEstado((e) => {
   KK = e;
-  renderKickGlobal();
   const antes = kkVer;
   for (let i = 0; i < N; i++) renderSlot(i);
   renderKkVer();
   if (antes && !kkVer) renderTudo(); else renderKickDock();
-  if (twHover != null && popTipo === 'kk') ovSync();
+  if (lives) ovSync();
 });
 app.kick.onZoom((z) => { ZOOMKK = z; renderKkVer(); });
 app.kick.onAudio((m) => { KKSOM = m || {}; renderKickDock(); renderKkVer(); });

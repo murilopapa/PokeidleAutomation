@@ -19,7 +19,7 @@ function aplicar(c) {
 ov.onConteudo(aplicar);
 document.addEventListener('focusout', () => setTimeout(() => { if (pendente) aplicar(pendente); }, 0));
 
-const ALVOS = '[data-cp],[data-cpt],[data-cpaba],[data-cpadd],[data-cpdel],[data-cpdesc],[data-cpaplicar],[data-somm],[data-rotabrir],[data-kklogin],[data-kkres],[data-am],[data-gear],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-zoom]';
+const ALVOS = '[data-lv],[data-lvaba],[data-twg],[data-kkg],[data-kkvis],[data-cp],[data-cpt],[data-cpaba],[data-cpadd],[data-cpdel],[data-cpdesc],[data-cpaplicar],[data-somm],[data-rotabrir],[data-kklogin],[data-kkres],[data-am],[data-gear],[data-link],[data-unlink],[data-cid],[data-reload],[data-fechar],[data-twcanal],[data-zoom]';
 function campos() {
   const out = {};
   box.querySelectorAll('input[id]').forEach((e) => { out[e.id] = e.value; });

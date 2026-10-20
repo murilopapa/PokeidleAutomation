@@ -102,6 +102,8 @@ await sleep(300);
 // Twitch: Client ID, vincular (Device Code falso), IRC entra nas lives oficiais com bônus
 await ui.click('.slot[data-slot="0"] [data-gear="0"]');
 await sleep(600);
+await ovClicar('[data-lv="0"]'); await sleep(500);
+check('menu da engrenagem leva à janela Twitch e Kick', /Twitch e Kick/.test(await ovTexto()));
 await ovClicar('[data-link="0"]');
 await sleep(5000);
 const tw = await ui.evaluate(() => TW);
@@ -110,14 +112,14 @@ check('entrou só nas lives oficiais com bônus', JSON.stringify([...tw.contas[0
 check('IRC respondeu PING', /IRC < PONG :tmi.twitch.tv/.test(mockOut));
 await ui.keyboard.press('Escape');
 await sleep(300);
-await ui.hover('.slot[data-slot="0"] [data-twbtn="0"]');
+await ui.click('.slot[data-slot="0"] [data-twbtn="0"]');
 await sleep(900);
 const pop = await ovTexto();
-check('overlay da Twitch lista as lives', /faasii/.test(pop) && /no chat/.test(pop), pop.replace(/\s+/g, ' ').slice(0, 160));
+check('janela Twitch e Kick lista as lives da Twitch', /faasii/.test(pop) && /no chat/.test(pop), pop.replace(/\s+/g, ' ').slice(0, 160));
 await shot('twitch.png');
-await ui.mouse.move(800, 30);
-await sleep(900);
-check('overlay da Twitch fecha ao tirar o mouse', (await ovTexto()) === '');
+await ui.keyboard.press('Escape');
+await sleep(500);
+check('Esc fecha a janela Twitch e Kick', (await ovTexto()) === '');
 await ui.click('.slot[data-slot="3"] [data-gear="3"]'); await sleep(600); await shot('menu.png'); await ui.keyboard.press('Escape');
 await sleep(600);
 
@@ -263,21 +265,23 @@ check('sem resgate automático no painel da Kick', !/Resgatar sozinho/.test(awai
 await ui.keyboard.press('Escape');
 await sleep(300);
 
-// Kick global (barra de cima): atalho para todas as contas logadas na Kick
-const kkg = () => ui.$$eval('#kkg button', (e) => e.map((b) => b.dataset.kkg + ':' + (b.className || 'off') + (b.disabled ? ':dis' : '')));
+// Kick global (janela Twitch e Kick → "Em todas as contas"): atalho para todas as contas logadas na Kick
+await ui.click('#lvg'); await sleep(600);
+const kkg = () => ovJs(`[...document.querySelectorAll('[data-kkg]')].map((b) => b.dataset.kkg + ':' + (b.classList.contains('on') ? 'on' : 'off') + (b.disabled ? ':dis' : ''))`);
 const g0 = await kkg();
 check('Kick global aparece com as contas logadas (farmar ligado, player leve)', g0.join() === 'ligado:on,leve:on', g0.join());
-await ui.click('#kkg [data-kkg="leve"]'); await sleep(4000);
+await ovClicar('[data-kkg="leve"]'); await sleep(4000);
 const urlsCompl = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()).filter((u) => u.includes('/kick/')));
 check('Kick global: Player leve desligado troca para a página completa', (await kkg()).includes('leve:off') && urlsCompl.length === 2 && urlsCompl.every((u) => !u.includes('?muted')), JSON.stringify(urlsCompl));
-await ui.click('#kkg [data-kkg="leve"]'); await sleep(4000);
-await ui.click('#kkg [data-kkg="ligado"]'); await sleep(4000);
+await ovClicar('[data-kkg="leve"]'); await sleep(4000);
+await ovClicar('[data-kkg="ligado"]'); await sleep(4000);
 const urlsOff = await eapp.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()).filter((u) => u.includes('/kick/')));
 check('Kick global: Farmar desligado fecha os players de todas', (await kkg()).includes('ligado:off') && urlsOff.length === 0, JSON.stringify(urlsOff));
 await shot('kick-global.png');
-await ui.click('#kkg [data-kkg="ligado"]'); await sleep(3000);
+await ovClicar('[data-kkg="ligado"]'); await sleep(3000);
 check('Kick global: Farmar liga de novo', (await kkg()).includes('ligado:on'), (await kkg()).join());
-check('K da Kick global verde', (await ui.$eval('#kkg .kkg-t svg', (e) => getComputedStyle(e).fill)) === 'rgb(83, 252, 24)', await ui.$eval('#kkg .kkg-t svg', (e) => getComputedStyle(e).fill));
+check('barra de cima não tem mais o grupo da Kick', !(await ui.$('#kkg')));
+await ui.keyboard.press('Escape'); await sleep(300);
 
 // Motor do Onde caçar (igual à extensão oficial): dados do jogo baixados, worker, geometria medida
 const mot = await ui.evaluate(() => ({ v: MOTOR_V, erro: MOTOR_ERRO, res: S.map((s) => ({ nick: s.snap?.nick, n: s.res?.lista?.length ?? 0, top: s.top?.map((r) => r.hunt.slug + ' ' + r.risco.txt) ?? [], ver: s.res?.versao, bonus: s.res?.bonusXp?.pokemon })), geo: Object.keys(geoJunta()) }));
