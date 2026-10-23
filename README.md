@@ -1,6 +1,8 @@
+**Português** · [English](README.en.md)
+
 # PokeIdle Helper
 
-Extensão (Chrome, Edge, Brave, Opera) para o pokeidle.io. Versão 0.9.0.
+Extensão (Chrome, Edge, Brave, Opera) para o pokeidle.io. Versão 0.9.6.
 
 - **Onde caçar**: mesma conta e mesmos dados da aba Onde caçar do guia (guiapokeidlehardtocapture.site), sem precisar do site aberto.
 - **Compra automática** de bolas e itens abaixo de um mínimo.
@@ -13,7 +15,7 @@ Extensão (Chrome, Edge, Brave, Opera) para o pokeidle.io. Versão 0.9.0.
 3. F5 no pokeidle.io. Clicar no ícone abre o painel (Opera: janelinha).
 
 Depois de mudar arquivos: botão de recarregar da extensão + F5 no jogo.
-Para o amigo: mandar `pokeidle-helper-0.9.0.zip` (o `manifest.json` fica na raiz do zip).
+Para o amigo: mandar `pokeidle-helper-<versão>.zip` (o `manifest.json` fica na raiz do zip).
 
 ## Estrutura
 - `page/proto.js` — nomes das mensagens do jogo (olhar aqui primeiro quando o jogo atualizar).
@@ -24,7 +26,7 @@ Para o amigo: mandar `pokeidle-helper-0.9.0.zip` (o `manifest.json` fica na raiz
 - `data/especies.json` — espécies do jogo (retratos).
 - `tools/` — geradores dos dois arquivos de dados.
 - `antigo-mvp/` — versões antigas.
-- `app-multiconta/` — ideia do app com até 4 contas (ver `PLANO.md`).
+- `app-multiconta/` — app com até 4 contas (ver `PLANO.md`).
 
 ## Atualizar dados
 - Guia mudou: baixar `data.js` e `geo.js` do site numa pasta e rodar `node tools/build-guia.mjs <pasta>`.
